@@ -293,48 +293,14 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                     ),
                   ),
 
-                  // Center Brand Title & Model Info
-                  Column(
-                    children: [
-                      Text(
-                        'ReflectMed AI',
-                        style: GoogleFonts.newsreader(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textInk,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: _aiService.hasApiKey ? const Color(0xFF10B981) : const Color(0xFFB37D2E),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            !_aiService.hasApiKey
-                                ? 'MODE OFFLINE'
-                                : (_aiService.isTokenGateway
-                                    ? 'DEEPSEEK ONLINE'
-                                    : (_profile.geminiModelName.contains('tuned')
-                                        ? 'MODEL TERLATIH AKTIF'
-                                        : 'GEMINI ONLINE')),
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
-                              color: AppTheme.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  // Center Brand Title
+                  Text(
+                    'ReflectMed AI',
+                    style: GoogleFonts.newsreader(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textInk,
+                    ),
                   ),
 
                   // Actions: Toggle Scenario Chips, Reset Chat & Settings Gear
