@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/chat_message.dart';
@@ -5,41 +7,57 @@ import 'ai_training_service.dart';
 
 class GeminiAiService {
   String? _apiKey;
-  String _modelName = 'gemini-1.5-flash';
-  GenerativeModel? _model;
+  String _modelName = 'deepseek-chat';
+  String _apiBaseUrl = 'https://tokengateway.ai.id/v1';
+  GenerativeModel? _geminiModel;
 
-  void updateApiKey(String? key, {String? modelName}) {
+  void updateApiKey(String? key, {String? modelName, String? baseUrl}) {
     _apiKey = key;
     if (modelName != null && modelName.trim().isNotEmpty) {
       _modelName = modelName.trim();
     }
-    if (key != null && key.trim().isNotEmpty) {
+    if (baseUrl != null && baseUrl.trim().isNotEmpty) {
+      _apiBaseUrl = baseUrl.trim();
+    }
+
+    final trimmedKey = key?.trim();
+    // Inisialisasi Google Gemini jika key berformat resmi Google AIzaSy
+    if (trimmedKey != null && trimmedKey.isNotEmpty && trimmedKey.startsWith('AIzaSy')) {
       final calibratedPrompt = AiTrainingService().buildCalibratedSystemPrompt();
-      _model = GenerativeModel(
-        model: _modelName,
-        apiKey: key.trim(),
+      _geminiModel = GenerativeModel(
+        model: _modelName.contains('deepseek') ? 'gemini-1.5-flash' : _modelName,
+        apiKey: trimmedKey,
         systemInstruction: Content.system(calibratedPrompt),
       );
     } else {
-      _model = null;
+      _geminiModel = null;
     }
   }
 
   String? lastError;
   bool get hasApiKey => _apiKey != null && _apiKey!.trim().isNotEmpty;
   String get activeModelName => _modelName;
+  String get activeBaseUrl => _apiBaseUrl;
 
-  /// Mengirim pesan ke AI Mentor (dengan fallback cerdas offline jika tidak ada API key atau error)
+  bool get isTokenGateway =>
+      _apiKey != null &&
+      (_apiKey!.trim().startsWith('tk-gw-') ||
+          _apiBaseUrl.contains('tokengateway') ||
+          _modelName.toLowerCase().contains('deepseek'));
+
+  /// Mengirim pesan ke AI Mentor (Otomatis mendeteksi TokenGateway DeepSeek atau Google Gemini)
   Future<String> sendMessage(String userText, List<ChatMessage> history) async {
-    if (_model != null) {
-      try {
-        // Format riwayat percakapan sesuai aturan multi-turn Gemini API:
-        // 1. Role awal harus 'user'
-        // 2. Role harus bergantian secara ketat: user -> model -> user -> model
-        // 3. Pesan userText aktif tidak dimasukkan ke history (karena dikirim via chat.sendMessage)
-        final validHistory = <Content>[];
+    final key = _apiKey?.trim();
 
-        // Ambil riwayat sebelum userText terakhir yang sedang dikirim
+    // 1. Jalur TokenGateway (DeepSeek / OpenAI Compatible)
+    if (key != null && key.isNotEmpty && (key.startsWith('tk-gw-') || _apiBaseUrl.contains('tokengateway'))) {
+      return await _sendTokenGatewayMessage(userText, history);
+    }
+
+    // 2. Jalur Google Gemini Resmi
+    if (_geminiModel != null) {
+      try {
+        final validHistory = <Content>[];
         final pastMessages = history.where((m) => m.id != 'welcome').toList();
         if (pastMessages.isNotEmpty && pastMessages.last.isUser && pastMessages.last.text == userText) {
           pastMessages.removeLast();
@@ -48,10 +66,8 @@ class GeminiAiService {
         String? lastRole;
         for (final msg in pastMessages) {
           final role = msg.isUser ? 'user' : 'model';
-          // Gemini mensyaratkan pesan pertama dalam riwayat harus 'user'
           if (validHistory.isEmpty && role != 'user') continue;
 
-          // Pastikan terjadi pergantian role yang valid
           if (role != lastRole) {
             validHistory.add(
               msg.isUser
@@ -62,12 +78,11 @@ class GeminiAiService {
           }
         }
 
-        // Jika riwayat berakhir pada pesan 'user', buang agar giliran berikutnya (sendMessage) valid
         if (validHistory.isNotEmpty && lastRole == 'user') {
           validHistory.removeLast();
         }
 
-        final chat = _model!.startChat(history: validHistory);
+        final chat = _geminiModel!.startChat(history: validHistory);
         final response = await chat.sendMessage(Content.text(userText));
         if (response.text != null && response.text!.isNotEmpty) {
           lastError = null;
@@ -75,14 +90,86 @@ class GeminiAiService {
         }
       } catch (e) {
         lastError = e.toString();
-        debugPrint('[ReflectMed GeminiAiService API Warning]: $e');
-        // Jika terjadi error kuota/koneksi API, beralih ke Fallback Scaffolding Engine
+        debugPrint('[ReflectMed Gemini API Error]: $e');
         return _generateIntelligentScaffoldingResponse(userText, history);
       }
     }
 
-    // Default: Intelligent Clinical Mentor Scaffolding Engine (Built-in AMEE Guide 44 & Gibbs)
+    // 3. Fallback: Intelligent Clinical Mentor Scaffolding Engine (Built-in AMEE Guide 44 & Gibbs)
     return _generateIntelligentScaffoldingResponse(userText, history);
+  }
+
+  /// Panggilan ke TokenGateway (https://tokengateway.ai.id/v1/chat/completions) dengan Model DeepSeek
+  Future<String> _sendTokenGatewayMessage(String userText, List<ChatMessage> history) async {
+    final calibratedPrompt = AiTrainingService().buildCalibratedSystemPrompt();
+
+    final messages = <Map<String, String>>[
+      {'role': 'system', 'content': calibratedPrompt},
+    ];
+
+    // Riwayat percakapan sebelumnya
+    final pastMessages = history.where((m) => m.id != 'welcome').toList();
+    if (pastMessages.isNotEmpty && pastMessages.last.isUser && pastMessages.last.text == userText) {
+      pastMessages.removeLast();
+    }
+
+    for (final msg in pastMessages) {
+      messages.add({
+        'role': msg.isUser ? 'user' : 'assistant',
+        'content': msg.text,
+      });
+    }
+
+    // Pesan pengguna aktif saat ini
+    messages.add({
+      'role': 'user',
+      'content': userText,
+    });
+
+    final endpoint = _apiBaseUrl.endsWith('/')
+        ? '${_apiBaseUrl}chat/completions'
+        : '$_apiBaseUrl/chat/completions';
+    final url = Uri.parse(endpoint);
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 30);
+
+    try {
+      final request = await client.postUrl(url);
+      request.headers.set('Content-Type', 'application/json; charset=utf-8');
+      request.headers.set('Authorization', 'Bearer ${_apiKey!.trim()}');
+
+      final payload = jsonEncode({
+        'model': _modelName.trim().isNotEmpty ? _modelName.trim() : 'deepseek-chat',
+        'messages': messages,
+        'temperature': 0.7,
+      });
+
+      request.add(utf8.encode(payload));
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final json = jsonDecode(responseBody) as Map<String, dynamic>;
+        final choices = json['choices'] as List<dynamic>?;
+        if (choices != null && choices.isNotEmpty) {
+          final message = choices[0]['message'] as Map<String, dynamic>?;
+          final content = message?['content'] as String?;
+          if (content != null && content.trim().isNotEmpty) {
+            lastError = null;
+            return content.trim();
+          }
+        }
+      }
+
+      throw Exception('TokenGateway [HTTP ${response.statusCode}]: $responseBody');
+    } catch (e) {
+      lastError = e.toString();
+      debugPrint('[ReflectMed TokenGateway Error]: $e');
+      return _generateIntelligentScaffoldingResponse(userText, history);
+    } finally {
+      client.close();
+    }
   }
 
   /// Engine pedagogis bawaan berbasis aturan AMEE Guide 44 & Siklus Gibbs

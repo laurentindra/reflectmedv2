@@ -40,6 +40,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     final supCtrl = TextEditingController(text: _profile.supervisorName.isNotEmpty ? _profile.supervisorName : 'Prof. Dr. Siti Rahayu, SpPD-KKV');
     final keyCtrl = TextEditingController(text: _profile.geminiApiKey);
     final modelCtrl = TextEditingController(text: _profile.geminiModelName);
+    final urlCtrl = TextEditingController(text: _profile.apiBaseUrl);
 
     showDialog(
       context: context,
@@ -77,17 +78,25 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               TextField(
                 controller: keyCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'Gemini API Key',
-                  hintText: 'AIzaSy...',
-                  helperText: 'Diperlukan untuk menghubungkan AI ke Google Cloud',
+                  labelText: 'API Key (TokenGateway / DeepSeek / Gemini)',
+                  hintText: 'tk-gw-... atau AIzaSy...',
+                  helperText: 'TokenGateway: tk-gw-... | Gemini: AIzaSy...',
+                ),
+              ),
+              TextField(
+                controller: urlCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'API Base URL Gateway',
+                  hintText: 'https://tokengateway.ai.id/v1',
+                  helperText: 'Endpoint untuk model DeepSeek / OpenAI gateway',
                 ),
               ),
               TextField(
                 controller: modelCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'ID Model AI (Base / Tuned Model)',
-                  hintText: 'gemini-1.5-flash atau tunedModels/...',
-                  helperText: 'Masukkan nama model hasil training Google AI Studio',
+                  labelText: 'ID Model AI',
+                  hintText: 'deepseek-chat atau gemini-1.5-flash',
+                  helperText: 'Model aktif di TokenGateway (misal: deepseek-chat)',
                 ),
               ),
             ],
@@ -105,30 +114,34 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             ),
             onPressed: () async {
               final rawKey = keyCtrl.text.trim();
-              if (rawKey.isNotEmpty && !rawKey.startsWith('AIzaSy')) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: const Color(0xFFB45309),
-                    behavior: SnackBarBehavior.floating,
-                    content: Text(
-                      'Perhatian: Google Gemini API Key biasanya diawali "AIzaSy...". Pastikan menyalin dari aistudio.google.com/app/apikey',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
-                    ),
-                    duration: const Duration(seconds: 5),
-                  ),
-                );
-              }
+              final rawUrl = urlCtrl.text.trim();
+              final rawModel = modelCtrl.text.trim();
+
               _profile.fullName = nameCtrl.text.trim();
               _profile.studentId = nimCtrl.text.trim();
               _profile.currentDepartment = deptCtrl.text.trim();
               _profile.teachingHospital = hospCtrl.text.trim();
               _profile.supervisorName = supCtrl.text.trim();
               _profile.geminiApiKey = rawKey;
-              _profile.geminiModelName = modelCtrl.text.trim().isNotEmpty ? modelCtrl.text.trim() : 'gemini-1.5-flash';
+              _profile.geminiModelName = rawModel.isNotEmpty ? rawModel : 'deepseek-chat';
+              _profile.apiBaseUrl = rawUrl.isNotEmpty ? rawUrl : 'https://tokengateway.ai.id/v1';
+
               await StorageService.saveProfile(_profile);
               if (mounted) {
                 setState(() {});
                 Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: AppTheme.primaryTeal,
+                    behavior: SnackBarBehavior.floating,
+                    content: Text(
+                      rawKey.startsWith('tk-gw-')
+                          ? 'TokenGateway DeepSeek berhasil terhubung!'
+                          : 'Pengaturan profil dan AI berhasil disimpan!',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                  ),
+                );
               }
             },
             child: Text('Simpan', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
@@ -318,8 +331,21 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     const SizedBox(height: 14),
 
                     // Group: AKUN
-                    _buildGroupCard('AKUN DOKTER', [
+                    _buildGroupCard('AKUN DOKTER & KONEKSI AI', [
                       _buildMenuItem(Icons.person_outline, 'Profil & Identitas', 'Nama, institusi, DPJP', onTap: _openEditDialog),
+                      _buildMenuItem(
+                        Icons.memory_rounded,
+                        'Model LLM Aktif',
+                        _profile.geminiApiKey.isEmpty
+                            ? 'Mode Offline (Engine Bawaan)'
+                            : (_profile.geminiApiKey.startsWith('tk-gw-')
+                                ? 'TokenGateway · ${_profile.geminiModelName}'
+                                : 'Google Cloud · ${_profile.geminiModelName}'),
+                        statusTag: _profile.geminiApiKey.isEmpty
+                            ? 'Offline'
+                            : (_profile.geminiApiKey.startsWith('tk-gw-') ? 'DeepSeek' : 'Gemini'),
+                        onTap: _openEditDialog,
+                      ),
                       _buildMenuItem(Icons.verified_user_outlined, 'Autentikasi SSO Kampus', 'Terhubung: FKUI SSO ID', statusTag: 'Aktif'),
                       _buildMenuItem(Icons.lock_outline, 'Keamanan Data Refleksi', 'Enkripsi RSA-2048 & TLS 1.3'),
                     ]),

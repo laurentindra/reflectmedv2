@@ -87,7 +87,11 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
 
     setState(() {
       _profile = profile;
-      _aiService.updateApiKey(profile.geminiApiKey, modelName: profile.geminiModelName);
+      _aiService.updateApiKey(
+        profile.geminiApiKey,
+        modelName: profile.geminiModelName,
+        baseUrl: profile.apiBaseUrl,
+      );
       _messages = savedChat;
     });
 
@@ -314,9 +318,13 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _aiService.hasApiKey
-                                ? (_profile.geminiModelName.contains('tuned') ? 'MODEL TERLATIH AKTIF' : 'GEMINI ONLINE')
-                                : 'MODE OFFLINE',
+                            !_aiService.hasApiKey
+                                ? 'MODE OFFLINE'
+                                : (_aiService.isTokenGateway
+                                    ? 'DEEPSEEK ONLINE'
+                                    : (_profile.geminiModelName.contains('tuned')
+                                        ? 'MODEL TERLATIH AKTIF'
+                                        : 'GEMINI ONLINE')),
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 9.5,
                               fontWeight: FontWeight.w700,
