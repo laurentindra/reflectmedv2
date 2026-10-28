@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,8 @@ import '../models/chat_message.dart';
 import '../models/student_profile.dart';
 import '../services/gemini_ai_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/talking_mentor_avatar.dart';
+import '../widgets/quick_scenario_chips.dart';
 import 'profile_settings_screen.dart';
 
 class ReflectiveChatScreen extends StatefulWidget {
@@ -23,6 +26,10 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
   StudentProfile _profile = StudentProfile();
   List<ChatMessage> _messages = [];
   bool _isTyping = false;
+  bool _isMentorSpeaking = false;
+  String? _activeQuestion;
+  Timer? _speakingTimer;
+  bool _showQuickChips = true;
   int _activeStepIndex = 0;
 
   final List<Map<String, dynamic>> _gibbsPhases = [
@@ -40,6 +47,40 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     _initChat();
   }
 
+  @override
+  void dispose() {
+    _speakingTimer?.cancel();
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String _extractQuestion(String text) {
+    // Ambil kalimat yang memuat tanda tanya '?'
+    final sentences = text.split(RegExp(r'(?<=[.!?\n])\s+'));
+    final questions = sentences.where((s) => s.contains('?')).toList();
+    if (questions.isNotEmpty) {
+      return questions.join(' ');
+    }
+    return text.length > 130 ? '${text.substring(0, 130)}...' : text;
+  }
+
+  void _triggerMentorSpeaking(String text) {
+    _speakingTimer?.cancel();
+    setState(() {
+      _isMentorSpeaking = true;
+      _activeQuestion = _extractQuestion(text);
+    });
+
+    // Durasi animasi berbicara proporsional dengan panjang teks (min 6s, max 12s)
+    final durationSeconds = (text.length / 25).clamp(6, 12).toInt();
+    _speakingTimer = Timer(Duration(seconds: durationSeconds), () {
+      if (mounted) {
+        setState(() => _isMentorSpeaking = false);
+      }
+    });
+  }
+
   Future<void> _initChat() async {
     final profile = await StorageService.loadProfile();
     final savedChat = await StorageService.loadActiveChat();
@@ -53,15 +94,19 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     if (_messages.isEmpty) {
       final welcomeMsg = ChatMessage(
         id: 'welcome',
-        text: 'Selamat datang, dr. Ahmad. Saya ReflectMed AI — pemandu refleksi klinis Anda melalui Siklus Gibbs. Ceritakan satu pengalaman klinis yang ingin Anda telaah hari ini, dan kita mulai dari awal.',
+        text: 'Selamat datang, ${_profile.fullName.isNotEmpty ? _profile.fullName : 'Dokter'}. Saya dr. Mentor Refleksi Anda. Ceritakan satu pengalaman klinis atau momen menantang yang ingin Anda telaah hari ini, dan kita bedah bersama melalui Siklus Gibbs.',
         isUser: false,
         timestamp: DateTime.now(),
         estimatedPhase: GibbsPhase.description,
       );
       setState(() {
         _messages = [welcomeMsg];
+        _activeQuestion = 'Ceritakan satu pengalaman klinis yang ingin Anda telaah hari ini...';
       });
       StorageService.saveActiveChat(_messages);
+    } else {
+      final lastAi = _messages.lastWhere((m) => !m.isUser, orElse: () => _messages.first);
+      _activeQuestion = _extractQuestion(lastAi.text);
     }
   }
 
@@ -109,7 +154,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     if (confirmed == true) {
       final welcomeMsg = ChatMessage(
         id: 'welcome',
-        text: 'Selamat datang, ${_profile.fullName.isNotEmpty ? _profile.fullName : 'Dokter'}. Saya ReflectMed AI — pemandu refleksi klinis Anda melalui Siklus Gibbs. Ceritakan satu pengalaman klinis yang ingin Anda telaah hari ini, dan kita mulai dari awal.',
+        text: 'Selamat datang, ${_profile.fullName.isNotEmpty ? _profile.fullName : 'Dokter'}. Saya dr. Mentor Refleksi Anda. Ceritakan satu pengalaman klinis yang ingin Anda telaah hari ini, dan kita mulai dari awal.',
         isUser: false,
         timestamp: DateTime.now(),
         estimatedPhase: GibbsPhase.description,
@@ -117,6 +162,9 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
       setState(() {
         _messages = [welcomeMsg];
         _activeStepIndex = 0;
+        _isMentorSpeaking = false;
+        _showQuickChips = true;
+        _activeQuestion = 'Ceritakan satu pengalaman klinis yang ingin Anda telaah hari ini...';
       });
       await StorageService.saveActiveChat(_messages);
     }
@@ -125,6 +173,8 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
   Future<void> _sendMessage([String? presetText]) async {
     final text = presetText ?? _textController.text.trim();
     if (text.isEmpty) return;
+
+    _speakingTimer?.cancel();
 
     final userMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -137,6 +187,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
       _messages.add(userMsg);
       _textController.clear();
       _isTyping = true;
+      _isMentorSpeaking = false;
     });
     _scrollToBottom();
     await StorageService.saveActiveChat(_messages);
@@ -159,6 +210,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
           _activeStepIndex++;
         }
       });
+      _triggerMentorSpeaking(reply);
       _scrollToBottom();
       await StorageService.saveActiveChat(_messages);
 
@@ -201,12 +253,16 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final mentorState = _isTyping
+        ? MentorState.thinking
+        : (_isMentorSpeaking ? MentorState.asking : MentorState.listening);
+
     return Scaffold(
       backgroundColor: AppTheme.parchmentBg,
       body: SafeArea(
         child: Column(
           children: [
-            // 1. TOP APP BAR (Lightbulb, ReflectMed AI + GEMINI FINE-TUNED, Settings Gear)
+            // 1. TOP APP BAR
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
@@ -273,10 +329,31 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                     ],
                   ),
 
-                  // Actions: Reset Chat & Settings Gear
+                  // Actions: Toggle Scenario Chips, Reset Chat & Settings Gear
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      InkWell(
+                        onTap: () => setState(() => _showQuickChips = !_showQuickChips),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: _showQuickChips ? AppTheme.primaryTeal.withOpacity(0.12) : AppTheme.surfaceWarm,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _showQuickChips ? AppTheme.primaryTeal : AppTheme.lightBorder,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.auto_stories_outlined,
+                            color: _showQuickChips ? AppTheme.primaryTeal : AppTheme.textMuted,
+                            size: 19,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       InkWell(
                         onTap: _resetChat,
                         borderRadius: BorderRadius.circular(10),
@@ -362,7 +439,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
 
             // 2. HORIZONTAL GIBBS PHASE STRIP
             Container(
-              height: 40,
+              height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: const BoxDecoration(
                 border: Border(
@@ -372,7 +449,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _gibbsPhases.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 16),
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
                 itemBuilder: (ctx, i) {
                   final phase = _gibbsPhases[i];
                   final isActive = _activeStepIndex == i;
@@ -396,11 +473,23 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
               ),
             ),
 
-            // 3. CHAT MESSAGES CANVAS
+            // 3. LIVING MENTOR TALKING AVATAR & PRESENCE BAR
+            TalkingMentorAvatar(
+              state: mentorState,
+              activeQuestion: _activeQuestion,
+              onReplayVoice: () {
+                if (_messages.isNotEmpty) {
+                  final lastAi = _messages.lastWhere((m) => !m.isUser, orElse: () => _messages.first);
+                  _triggerMentorSpeaking(lastAi.text);
+                }
+              },
+            ),
+
+            // 4. CHAT MESSAGES CANVAS
             Expanded(
               child: ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 itemCount: _messages.length + (_isTyping ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index == _messages.length && _isTyping) {
@@ -412,9 +501,17 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
               ),
             ),
 
-            // 4. CHAT INPUT BAR & DISCLAIMER
+            // 5. QUICK SCENARIO CHIPS (Jika diaktifkan)
+            if (_showQuickChips)
+              QuickScenarioChips(
+                onSelectScenario: (scenarioPrompt) {
+                  _sendMessage(scenarioPrompt);
+                },
+              ),
+
+            // 6. CHAT INPUT BAR DENGAN MICROPHONE ICON
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
               decoration: const BoxDecoration(
                 color: AppTheme.parchmentBg,
                 border: Border(
@@ -426,6 +523,49 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                 children: [
                   Row(
                     children: [
+                      // Tombol Mikrofon Suara (Siap untuk integrasi Voice STT)
+                      InkWell(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: AppTheme.primaryTeal,
+                              behavior: SnackBarBehavior.floating,
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.mic, color: Colors.white, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Fitur Suara: Anda dapat langsung bercerita dengan menekan tombol mic ini!',
+                                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryTeal.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.35)),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.mic_none_rounded,
+                              size: 22,
+                              color: AppTheme.primaryTeal,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Input Teks
                       Expanded(
                         child: Container(
                           decoration: BoxDecoration(
@@ -453,14 +593,15 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      // Sand / Tan Send Button
+                      const SizedBox(width: 8),
+
+                      // Tombol Kirim
                       InkWell(
                         onTap: () => _sendMessage(),
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          width: 46,
-                          height: 46,
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
                             color: const Color(0xFFDDD4C6),
                             borderRadius: BorderRadius.circular(12),
@@ -476,11 +617,11 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     'VERIFIKASI SELALU DENGAN SUPERVISOR KLINIS ANDA',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 9,
+                      fontSize: 8.5,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.4,
                       color: AppTheme.textLight,
@@ -500,7 +641,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
 
     if (msg.isUser) {
       return Container(
-        margin: const EdgeInsets.only(bottom: 20, left: 32),
+        margin: const EdgeInsets.only(bottom: 18, left: 32),
         alignment: Alignment.centerRight,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -535,9 +676,12 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
         ),
       );
     } else {
-      // AI Message: Minimalist Editorial Left Accent Bar
+      // AI Message
+      final question = _extractQuestion(msg.text);
+      final isCurrentlyPlaying = _isMentorSpeaking && _activeQuestion == question;
+
       return Container(
-        margin: const EdgeInsets.only(bottom: 24, right: 24),
+        margin: const EdgeInsets.only(bottom: 22, right: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -545,8 +689,8 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 3,
-                  height: 38,
+                  width: 3.5,
+                  height: 40,
                   decoration: BoxDecoration(
                     color: AppTheme.primaryTeal,
                     borderRadius: BorderRadius.circular(2),
@@ -554,13 +698,52 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    msg.text,
-                    style: GoogleFonts.newsreader(
-                      fontSize: 16,
-                      color: AppTheme.textInk,
-                      height: 1.45,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        msg.text,
+                        style: GoogleFonts.newsreader(
+                          fontSize: 15.5,
+                          color: AppTheme.textInk,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Tombol Dengarkan / Ulangi Animasi Bertanya
+                      InkWell(
+                        onTap: () => _triggerMentorSpeaking(msg.text),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: isCurrentlyPlaying
+                                ? AppTheme.primaryTeal
+                                : AppTheme.primaryTeal.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isCurrentlyPlaying ? Icons.volume_up_rounded : Icons.record_voice_over_rounded,
+                                size: 12,
+                                color: isCurrentlyPlaying ? Colors.white : AppTheme.primaryTeal,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isCurrentlyPlaying ? 'Mentor Sedang Bertanya...' : 'Dengarkan Pertanyaan',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: isCurrentlyPlaying ? Colors.white : AppTheme.primaryTeal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -596,7 +779,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
           ),
           const SizedBox(width: 10),
           Text(
-            'ReflectMed AI sedang menyusun tanggapan...',
+            'dr. Mentor sedang menelaah pengalaman Anda...',
             style: GoogleFonts.newsreader(
               fontSize: 13,
               fontStyle: FontStyle.italic,
