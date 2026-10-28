@@ -5,7 +5,7 @@ echo ================================================================
 echo               PUSH KODE REFLECTMED AI KE GITHUB
 echo ================================================================
 echo.
-echo Repositori Target: https://github.com/laurentindra/reflectmed-ai
+echo Repositori Target: https://github.com/laurentindra/reflectmedv2
 echo.
 set "PATH=C:\Program Files\Git\cmd;%PATH%"
 cd /d "%~dp0"
@@ -17,7 +17,7 @@ echo.
 if %ERRORLEVEL% EQU 0 (
     echo ============================================================
     echo [BERHASIL] Seluruh kode berhasil ter-push ke GitHub!
-    echo Kunjungi: https://github.com/laurentindra/reflectmed-ai
+    echo Kunjungi: https://github.com/laurentindra/reflectmedv2
     echo ============================================================
 ) else (
     echo [INFO] Jika muncul jendela login, silakan login melalui browser

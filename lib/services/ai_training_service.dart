@@ -10,7 +10,9 @@ class AiTrainingService {
 
   static final AiTrainingService _instance = AiTrainingService._internal();
   factory AiTrainingService() => _instance;
-  AiTrainingService._internal();
+  AiTrainingService._internal() {
+    _exemplars = _getDefaultExemplars();
+  }
 
   MentorPersonaConfig _currentPersona = MentorPersonaConfig();
   List<TrainingExemplar> _exemplars = [];

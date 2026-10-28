@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../core/theme/app_theme.dart';
 import '../models/chat_message.dart';
 import '../models/student_profile.dart';
 import '../services/gemini_ai_service.dart';
-import '../services/gibbs_extractor_service.dart';
 import '../services/storage_service.dart';
-import 'gibbs_report_screen.dart';
+import 'profile_settings_screen.dart';
 
 class ReflectiveChatScreen extends StatefulWidget {
   const ReflectiveChatScreen({Key? key}) : super(key: key);
@@ -22,7 +23,16 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
   StudentProfile _profile = StudentProfile();
   List<ChatMessage> _messages = [];
   bool _isTyping = false;
-  bool _isExtracting = false;
+  int _activeStepIndex = 0;
+
+  final List<Map<String, dynamic>> _gibbsPhases = [
+    {'code': '01', 'name': 'DESKRIPSI', 'color': AppTheme.stageDeskripsi, 'phase': GibbsPhase.description},
+    {'code': '02', 'name': 'PERASAAN', 'color': AppTheme.stagePerasaan, 'phase': GibbsPhase.feelings},
+    {'code': '03', 'name': 'EVALUASI', 'color': AppTheme.stageEvaluasi, 'phase': GibbsPhase.evaluation},
+    {'code': '04', 'name': 'ANALISIS', 'color': AppTheme.stageAnalisis, 'phase': GibbsPhase.analysis},
+    {'code': '05', 'name': 'KESIMPULAN', 'color': AppTheme.stageKesimpulan, 'phase': GibbsPhase.conclusion},
+    {'code': '06', 'name': 'RENCANA AKSI', 'color': AppTheme.stageRencana, 'phase': GibbsPhase.actionPlan},
+  ];
 
   @override
   void initState() {
@@ -36,14 +46,14 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
 
     setState(() {
       _profile = profile;
-      _aiService.updateApiKey(profile.geminiApiKey);
+      _aiService.updateApiKey(profile.geminiApiKey, modelName: profile.geminiModelName);
       _messages = savedChat;
     });
 
     if (_messages.isEmpty) {
       final welcomeMsg = ChatMessage(
         id: 'welcome',
-        text: 'Halo! Saya AI Guide Refleksi Anda.\n\nSaya di sini untuk membantu Anda mengeksplorasi pengalaman klinis lebih dalam — bukan untuk menulis refleksi, tapi untuk membantu Anda menemukan insight sendiri melalui pertanyaan.\n\nCeritakan pengalaman klinis terbaru Anda yang berkesan di stase ${_profile.currentDepartment}. Apa yang terjadi?',
+        text: 'Selamat datang, dr. Ahmad. Saya ReflectMed AI — pemandu refleksi klinis Anda melalui Siklus Gibbs. Ceritakan satu pengalaman klinis yang ingin Anda telaah hari ini, dan kita mulai dari awal.',
         isUser: false,
         timestamp: DateTime.now(),
         estimatedPhase: GibbsPhase.description,
@@ -55,11 +65,66 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     }
   }
 
+  void _openSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
+    );
+    _initChat();
+  }
+
+  void _resetChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceWarm,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Mulai Refleksi Baru?',
+          style: GoogleFonts.newsreader(fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.textInk),
+        ),
+        content: Text(
+          'Percakapan saat ini akan dibersihkan agar Anda bisa menelaah kasus klinis baru dari awal Siklus Gibbs.',
+          style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppTheme.textMuted, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Batal', style: GoogleFonts.plusJakartaSans(color: AppTheme.textMuted, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryTeal,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Mulai Baru', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final welcomeMsg = ChatMessage(
+        id: 'welcome',
+        text: 'Selamat datang, ${_profile.fullName.isNotEmpty ? _profile.fullName : 'Dokter'}. Saya ReflectMed AI — pemandu refleksi klinis Anda melalui Siklus Gibbs. Ceritakan satu pengalaman klinis yang ingin Anda telaah hari ini, dan kita mulai dari awal.',
+        isUser: false,
+        timestamp: DateTime.now(),
+        estimatedPhase: GibbsPhase.description,
+      );
+      setState(() {
+        _messages = [welcomeMsg];
+        _activeStepIndex = 0;
+      });
+      await StorageService.saveActiveChat(_messages);
+    }
+  }
+
   Future<void> _sendMessage([String? presetText]) async {
     final text = presetText ?? _textController.text.trim();
     if (text.isEmpty) return;
-
-    if (presetText == null) _textController.clear();
 
     final userMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -70,35 +135,63 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
 
     setState(() {
       _messages.add(userMsg);
+      _textController.clear();
       _isTyping = true;
     });
-
     _scrollToBottom();
     await StorageService.saveActiveChat(_messages);
 
-    final aiReplyText = await _aiService.sendMessage(text, _messages);
+    try {
+      final reply = await _aiService.sendMessage(text, _messages);
 
-    final aiMsg = ChatMessage(
-      id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-      text: aiReplyText,
-      isUser: false,
-      timestamp: DateTime.now(),
-    );
+      final aiMsg = ChatMessage(
+        id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
+        text: reply,
+        isUser: false,
+        timestamp: DateTime.now(),
+        estimatedPhase: _gibbsPhases[_activeStepIndex]['phase'] as GibbsPhase,
+      );
 
-    setState(() {
-      _messages.add(aiMsg);
-      _isTyping = false;
-    });
+      setState(() {
+        _messages.add(aiMsg);
+        _isTyping = false;
+        if (_activeStepIndex < _gibbsPhases.length - 1) {
+          _activeStepIndex++;
+        }
+      });
+      _scrollToBottom();
+      await StorageService.saveActiveChat(_messages);
 
-    _scrollToBottom();
-    await StorageService.saveActiveChat(_messages);
+      if (_aiService.lastError != null && mounted) {
+        final err = _aiService.lastError!;
+        final isAuthErr = err.contains('invalid authentication') || err.contains('API key not valid');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF991B1B),
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              isAuthErr
+                  ? 'Kunci API Gemini tidak valid (Google mewajibkan format resmi awalan "AIzaSy..."). Masuk ke Pengaturan untuk memperbarui.'
+                  : 'Koneksi AI: $err',
+              style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isTyping = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Koneksi AI: $e')),
+      );
+    }
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 60,
+          _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -106,257 +199,293 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     });
   }
 
-  Future<void> _extractAndGenerateReport() async {
-    if (_messages.where((m) => m.isUser).isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Silakan curhat terlebih dahulu sebelum menyusun laporan.')),
-      );
-      return;
-    }
-
-    setState(() => _isExtracting = true);
-
-    final extractor = GibbsExtractorService(apiKey: _profile.geminiApiKey);
-    final reflection = await extractor.extractReflection(
-      messages: _messages,
-      profile: _profile,
-    );
-
-    await StorageService.saveReflection(reflection);
-    setState(() => _isExtracting = false);
-
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => GibbsReportScreen(reflection: reflection)),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final userCount = _messages.where((m) => m.isUser).length;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F8F8),
+      backgroundColor: AppTheme.parchmentBg,
       body: SafeArea(
         child: Column(
           children: [
-            // TEAL HEADER (Matching CHATBOT CONSULT.png)
+            // 1. TOP APP BAR (Lightbulb, ReflectMed AI + GEMINI FINE-TUNED, Settings Gear)
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppTheme.primaryTeal, AppTheme.primaryTealDark],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(18),
-                  bottomRight: Radius.circular(18),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFE5DDD1), width: 1),
                 ),
               ),
-              child: Column(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Lightbulb Icon Container
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceWarm,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.primaryTeal, width: 1.2),
+                    ),
+                    child: const Icon(
+                      Icons.lightbulb_outline,
+                      color: AppTheme.primaryTeal,
+                      size: 20,
+                    ),
+                  ),
+
+                  // Center Brand Title & Model Info
+                  Column(
                     children: [
-                      const SizedBox(width: 32),
+                      Text(
+                        'ReflectMed AI',
+                        style: GoogleFonts.newsreader(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textInk,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Image.asset(
-                            'assets/images/logoo.png',
-                            height: 22,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Image.asset(
-                              'assets/images/logo.png',
-                              height: 22,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.psychology, color: Colors.white),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: _aiService.hasApiKey ? const Color(0xFF10B981) : const Color(0xFFB37D2E),
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          const Text('AI Guide · Aktif', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 5),
+                          Text(
+                            _aiService.hasApiKey
+                                ? (_profile.geminiModelName.contains('tuned') ? 'MODEL TERLATIH AKTIF' : 'GEMINI ONLINE')
+                                : 'MODE OFFLINE',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
                         ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
-                        onPressed: () {
-                          StorageService.clearActiveChat();
-                          _initChat();
-                        },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.assignment_outlined, size: 12, color: Colors.white70),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Konteks: Siklus Refleksi Gibbs · Rotasi ${_profile.currentDepartment}',
-                          style: const TextStyle(color: Colors.white, fontSize: 10.5),
+
+                  // Actions: Reset Chat & Settings Gear
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: _resetChat,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceWarm,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppTheme.lightBorder),
+                          ),
+                          child: const Icon(
+                            Icons.restart_alt,
+                            color: AppTheme.textMuted,
+                            size: 20,
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: _openSettings,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceWarm,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppTheme.lightBorder),
+                          ),
+                          child: const Icon(
+                            Icons.settings_outlined,
+                            color: AppTheme.textMuted,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            // PRIVACY & ENCRYPTION NOTICE
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              color: const Color(0xFFF0FDFA),
-              child: const Text(
-                'Percakapan ini bersifat privat dan terenkripsi. AI memfasilitasi refleksi — bukan pengganti diskusi dengan supervisor Anda.',
-                style: TextStyle(fontSize: 9.5, color: Color(0xFF0F766E), height: 1.3),
-                textAlign: TextAlign.center,
+            // Banner Aktivasi API Key jika belum dipasang
+            if (!_aiService.hasApiKey)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFAF0E6),
+                  border: Border(bottom: BorderSide(color: Color(0xFFE5DDD1))),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 15, color: Color(0xFFB37D2E)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'AI aktif dalam mode offline. Pasang API Key untuk model terlatih Google Cloud.',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF7A4E1D),
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _openSettings,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Text(
+                          'Hubungkan',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.primaryTeal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            // CHAT MESSAGES
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(14),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final msg = _messages[index];
-                  return _buildChatBubble(msg);
+            // 2. HORIZONTAL GIBBS PHASE STRIP
+            Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFE5DDD1), width: 1),
+                ),
+              ),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _gibbsPhases.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 16),
+                itemBuilder: (ctx, i) {
+                  final phase = _gibbsPhases[i];
+                  final isActive = _activeStepIndex == i;
+                  final color = phase['color'] as Color;
+
+                  return GestureDetector(
+                    onTap: () => setState(() => _activeStepIndex = i),
+                    child: Center(
+                      child: Text(
+                        '${phase['code']} ${phase['name']}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10.5,
+                          fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                          letterSpacing: 1.0,
+                          color: isActive ? color : AppTheme.textLight,
+                        ),
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
 
-            if (_isTyping)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: const [
-                    SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryTeal)),
-                    SizedBox(width: 8),
-                    Text('AI Guide sedang merenung & merespons...', style: TextStyle(fontSize: 10.5, color: Colors.grey)),
-                  ],
-                ),
-              ),
-
-            // SUGGESTIONS CHIPS ("Mulai dengan:")
-            if (userCount <= 1)
-              Container(
-                height: 38,
-                margin: const EdgeInsets.only(bottom: 6),
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                      child: Text('Mulai dengan:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                    ),
-                    _buildChip('Saya punya kasus yang ingin saya refleksikan'),
-                    _buildChip('Bantu saya memahami perasaan saya'),
-                    _buildChip('Apa yang bisa saya pelajari dari situasi ini?'),
-                    _buildChip('Bagaimana cara meningkatkan komunikasi klinis saya?'),
-                  ],
-                ),
-              ),
-
-            // COUNSELING CALLOUT BANNER
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFED7AA)),
-              ),
-              child: Row(
-                children: const [
-                  Icon(Icons.favorite_border, size: 14, color: Color(0xFFC2410C)),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text('Butuh dukungan? Layanan konseling tersedia.', style: TextStyle(fontSize: 10.5, color: Color(0xFF9A3412))),
-                  ),
-                  Text('Hubungi', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFC2410C))),
-                ],
+            // 3. CHAT MESSAGES CANVAS
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                itemCount: _messages.length + (_isTyping ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == _messages.length && _isTyping) {
+                    return _buildTypingIndicator();
+                  }
+                  final msg = _messages[index];
+                  return _buildMessageItem(msg);
+                },
               ),
             ),
 
-            // SYNTHESIZE BUTTON
-            if (userCount >= 2)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accentAmber,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: _isExtracting
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.auto_awesome, size: 16),
-                  label: const Text('Sintesis Laporan Gibbs & PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  onPressed: _isExtracting ? null : _extractAndGenerateReport,
+            // 4. CHAT INPUT BAR & DISCLAIMER
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              decoration: const BoxDecoration(
+                color: AppTheme.parchmentBg,
+                border: Border(
+                  top: BorderSide(color: Color(0xFFE5DDD1), width: 1),
                 ),
               ),
-
-            // INPUT BAR
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              color: Colors.white,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.mic, color: AppTheme.primaryTeal),
-                        onPressed: () {
-                          _sendMessage('Voice Note 60 Detik: Saat dinas jaga tadi, pasien sempat menolak diperiksa karena merasa belum kenal denganku. Setelah aku perkenalkan diri secara ramah, pasien menjadi kooperatif.');
-                        },
-                      ),
                       Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppTheme.surfaceSand,
+                            borderRadius: BorderRadius.circular(12),
                           ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: TextField(
                             controller: _textController,
-                            style: const TextStyle(fontSize: 12),
-                            decoration: const InputDecoration(
-                              hintText: 'Ceritakan pengalaman Anda...',
-                              hintStyle: TextStyle(fontSize: 11.5, color: Colors.grey),
+                            style: GoogleFonts.newsreader(
+                              fontSize: 15,
+                              color: AppTheme.textInk,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Tuliskan pengalaman klinis Anda...',
+                              hintStyle: GoogleFonts.newsreader(
+                                fontSize: 14.5,
+                                fontStyle: FontStyle.italic,
+                                color: AppTheme.textMuted,
+                              ),
                               border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: AppTheme.primaryTeal,
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_upward, size: 16, color: Colors.white),
-                          onPressed: () => _sendMessage(),
+                      const SizedBox(width: 10),
+                      // Sand / Tan Send Button
+                      InkWell(
+                        onTap: () => _sendMessage(),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDDD4C6),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.send_rounded,
+                              size: 19,
+                              color: AppTheme.textInk,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  const Text('AI tidak menyimpan identitas pasien · Enter untuk kirim', style: TextStyle(fontSize: 8.5, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'VERIFIKASI SELALU DENGAN SUPERVISOR KLINIS ANDA',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      color: AppTheme.textLight,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -366,43 +495,115 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     );
   }
 
-  Widget _buildChatBubble(ChatMessage msg) {
-    return Align(
-      alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: msg.isUser ? AppTheme.primaryTeal : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(14),
-            topRight: const Radius.circular(14),
-            bottomLeft: Radius.circular(msg.isUser ? 14 : 4),
-            bottomRight: Radius.circular(msg.isUser ? 4 : 14),
-          ),
-          border: msg.isUser ? null : Border.all(color: const Color(0xFFE2E8F0)),
+  Widget _buildMessageItem(ChatMessage msg) {
+    final timeStr = DateFormat('HH:mm').format(msg.timestamp);
+
+    if (msg.isUser) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 20, left: 32),
+        alignment: Alignment.centerRight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceWarm,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.lightBorder),
+              ),
+              child: Text(
+                msg.text,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  color: AppTheme.textInk,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'DOKTER · $timeStr',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.0,
+                color: AppTheme.textLight,
+              ),
+            ),
+          ],
         ),
-        child: Text(
-          msg.text,
-          style: TextStyle(
-            fontSize: 12,
-            color: msg.isUser ? Colors.white : const Color(0xFF0F172A),
-            height: 1.4,
-          ),
+      );
+    } else {
+      // AI Message: Minimalist Editorial Left Accent Bar
+      return Container(
+        margin: const EdgeInsets.only(bottom: 24, right: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 3,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryTeal,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    msg.text,
+                    style: GoogleFonts.newsreader(
+                      fontSize: 16,
+                      color: AppTheme.textInk,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 17),
+              child: Text(
+                'REFLECTMED AI · $timeStr',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  color: AppTheme.textLight,
+                ),
+              ),
+            ),
+          ],
         ),
-      ),
-    );
+      );
+    }
   }
 
-  Widget _buildChip(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ActionChip(
-        backgroundColor: const Color(0xFFF0FDFA),
-        side: const BorderSide(color: Color(0xFF99F6E4)),
-        label: Text(label, style: const TextStyle(fontSize: 10.5, color: Color(0xFF0F766E))),
-        onPressed: () => _sendMessage(label),
+  Widget _buildTypingIndicator() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16, left: 17),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryTeal),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'ReflectMed AI sedang menyusun tanggapan...',
+            style: GoogleFonts.newsreader(
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+              color: AppTheme.textMuted,
+            ),
+          ),
+        ],
       ),
     );
   }

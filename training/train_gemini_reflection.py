@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-Medireflect AI — Automated Fine-Tuning Pipeline for Google Gemini 1.5
+ReflectMed AI — Automated Fine-Tuning Pipeline for Google Gemini
 Berdasarkan Standar Pedagogis Medis AMEE Guide No. 44 (Sandars, 2009)
 ================================================================================
-Skrip ini mengunggah dataset kurasi klinis (JSONL) dan memulai proses
+Skrip ini mengunggah dataset kurasi klinis dan memulai proses
 Supervised Fine-Tuning (SFT) pada model Gemini 1.5 Flash untuk menghasilkan
 mentor reflektif kedokteran yang empatik, terstruktur Gibbs, dan bebas bias asesmen.
 """
@@ -15,14 +15,14 @@ import json
 import time
 import argparse
 
-def validate_jsonl_file(filepath):
-    """Validasi format dataset JSONL sebelum diunggah ke Google Cloud."""
+def validate_and_prepare_dataset(filepath):
+    """Validasi format dataset JSONL dan konversi ke pasangan text_input/output."""
     print(f"[*] Memeriksa format integritas dataset: {filepath}")
     if not os.path.exists(filepath):
         print(f"[!] Error: File dataset tidak ditemukan di {filepath}")
-        return False, 0
+        return False, []
 
-    valid_rows = 0
+    training_pairs = []
     with open(filepath, "r", encoding="utf-8") as f:
         for idx, line in enumerate(f, 1):
             line = line.strip()
@@ -30,86 +30,104 @@ def validate_jsonl_file(filepath):
                 continue
             try:
                 data = json.loads(line)
-                if "messages" not in data:
-                    print(f"[!] Baris {idx} tidak memiliki atribut 'messages'.")
-                    return False, valid_rows
-                roles = [m.get("role") for m in data["messages"]]
-                if not ("user" in roles and "model" in roles):
-                    print(f"[!] Baris {idx} harus memiliki pesan bertipe 'user' dan 'model'.")
-                    return False, valid_rows
-                valid_rows += 1
+                if "messages" in data:
+                    roles = [m.get("role") for m in data["messages"]]
+                    if not ("user" in roles and "model" in roles):
+                        print(f"[!] Baris {idx} harus memiliki pesan bertipe 'user' dan 'model'.")
+                        return False, []
+                    user_text = next((m.get("content", "") for m in data["messages"] if m.get("role") == "user"), "")
+                    model_text = next((m.get("content", "") for m in data["messages"] if m.get("role") == "model"), "")
+                    training_pairs.append({"text_input": user_text, "output": model_text})
+                elif "text_input" in data and "output" in data:
+                    training_pairs.append(data)
+                else:
+                    print(f"[!] Baris {idx} tidak memiliki format messages atau text_input/output.")
+                    return False, []
             except json.JSONDecodeError as e:
                 print(f"[!] Error sintaks JSON pada baris {idx}: {e}")
-                return False, valid_rows
+                return False, []
 
-    print(f"[+] Validasi sukses: {valid_rows} pasangan dialog klinis siap digunakan.")
-    return True, valid_rows
+    print(f"[+] Validasi sukses: {len(training_pairs)} pasangan dialog klinis AMEE 44 siap digunakan.")
+    return True, training_pairs
 
-def run_fine_tuning(api_key, dataset_path, model_name, epochs):
+def run_fine_tuning(api_key, training_samples, model_name, epochs):
     """Jalankan proses fine-tuning menggunakan Google Generative AI SDK."""
     try:
         import google.generativeai as genai
     except ImportError:
         print("[!] Library 'google-generativeai' belum terpasang.")
-        print("[*] Pasang dengan perintah: pip install google-generativeai")
-        return
+        print("[*] Memasang sekarang: pip install google-generativeai")
+        os.system(f"{sys.executable} -m pip install google-generativeai")
+        import google.generativeai as genai
 
     genai.configure(api_key=api_key)
 
     print("\n=======================================================")
-    print("🚀 MEMULAI PIPELINE TRAINING MEDIREFLECT AI")
+    print("🚀 MEMULAI PIPELINE TRAINING REFLECTMED AI")
     print("=======================================================")
-    print(f"• Base Model   : gemini-1.5-flash-001")
+    print(f"• Base Model   : models/gemini-1.5-flash-001")
     print(f"• Target Name  : {model_name}")
-    print(f"• Dataset      : {dataset_path}")
+    print(f"• Total Data   : {len(training_samples)} sample cases")
     print(f"• Epochs       : {epochs}")
     print("=======================================================\n")
 
-    # Inisialisasi proses tuning
-    print("[1/4] Mengunggah dataset ke Google AI Studio Storage...")
-    try:
-        # Load training dataset
-        training_data = []
-        with open(dataset_path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    training_data.append(json.loads(line.strip()))
+    print("[1/4] Menyiapkan payload dataset terstruktur...")
+    print(f"[2/4] Menghubungi Google AI Studio Tuning Service...")
+    print("[3/4] Mendaftarkan job fine-tuning pada klaster Google Cloud TPU...")
 
-        print(f"[2/4] Menyiapkan payload training ({len(training_data)} samples)...")
-        print("[3/4] Mendaftarkan job fine-tuning pada klaster Google Cloud TPU...")
-        
-        # Panggilan API Fine-Tuning resmi
+    try:
         operation = genai.create_tuned_model(
             source_model="models/gemini-1.5-flash-001",
-            training_data=training_data,
+            training_data=training_samples,
             id=model_name,
             epoch_count=epochs,
             batch_size=4,
             learning_rate=0.001,
-            description="Medireflect AI - Mentor Reflektif Klinis Kedokteran (AMEE Guide 44)",
+            description="ReflectMed AI - Mentor Reflektif Klinis Kedokteran (AMEE Guide 44)",
         )
 
-        print(f"[+] Job pelatihan berhasil dibuat! Nama Model: tunedModels/{model_name}")
-        print("[4/4] Memantau progres komputasi bobot (loss convergence)...")
+        full_model_name = f"tunedModels/{model_name}"
+        print(f"\n[+] Job pelatihan berhasil didaftarkan!")
+        print(f"[+] Nama Model Anda: {full_model_name}")
+        print("[4/4] Memantau proses training & konvergensi bobot model...")
 
-        # Polling status tuning
         for status in operation.wait_bar():
             time.sleep(10)
 
         result = operation.result()
-        print("\n🎉 PELATIHAN SELESAI DENGAN SUKSES!")
-        print(f"Nama Model Aktif: {result.name}")
-        print("Model kustom ini sekarang siap digunakan langsung di aplikasi Medireflect AI.")
-        
+        print("\n" + "=" * 55)
+        print("🎉 PELATIHAN SELESAI DENGAN SUKSES!")
+        print("=" * 55)
+        print(f"Model ID Resmi : {result.name}")
+        print("\nCara Menggunakan Model Ini di Aplikasi ReflectMed AI:")
+        print("1. Buka aplikasi ReflectMed AI di ponsel / emulator.")
+        print("2. Masuk ke 'Pengaturan & Profil'.")
+        print(f"3. Masukkan Model ID: {result.name}")
+        print("4. Chatbot Anda sekarang 100% menggunakan model hasil training ini!")
+
+        # Simpan ke file info konfigurasi lokal
+        config_path = os.path.join(os.path.dirname(__file__), "TRAINED_MODEL_INFO.json")
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "model_id": result.name,
+                "base_model": "gemini-1.5-flash-001",
+                "trained_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "samples_count": len(training_samples),
+                "epochs": epochs
+            }, f, indent=2)
+        print(f"\n[i] Informasi model tersimpan di: {config_path}")
+
     except Exception as e:
         print(f"\n[!] Catatan Eksekusi API: {e}")
-        print("\n💡 Panduan Alternatif (Tanpa Koding):")
-        print("Anda dapat mengunggah file 'medireflect_finetuning_dataset.jsonl' langsung")
-        print("ke Google AI Studio web interface di https://aistudio.google.com/ -> 'Tuning'")
-        print("untuk melatih model hanya dengan klik mouse tanpa konfigurasi terminal!")
+        print("\n💡 Panduan Alternatif (Web GUI No-Code):")
+        print("1. Kunjungi: https://aistudio.google.com/ -> Menu 'Tuned Models'")
+        print("2. Klik 'Create Tuned Model' -> Pilih 'Gemini 1.5 Flash'")
+        print("3. Unggah file CSV siap pakai yang telah kami buatkan di:")
+        print(f"   📁 {os.path.abspath(os.path.join(os.path.dirname(__file__), 'medireflect_tuning_pairs.csv'))}")
+        print("4. Klik 'Tune' dan dapatkan model dalam 5 menit!")
 
 def main():
-    parser = argparse.ArgumentParser(description="Medireflect AI Fine-Tuning CLI")
+    parser = argparse.ArgumentParser(description="ReflectMed AI Fine-Tuning CLI")
     parser.add_argument(
         "--api-key",
         default=os.environ.get("GEMINI_API_KEY", ""),
@@ -122,7 +140,7 @@ def main():
     )
     parser.add_argument(
         "--model-name",
-        default=f"medireflect-mentor-v1",
+        default="reflectmed-mentor-v1",
         help="ID nama unik untuk model kustom hasil pelatihan",
     )
     parser.add_argument(
@@ -142,18 +160,29 @@ def main():
         if os.path.exists(candidate):
             dataset_file = candidate
 
-    valid, count = validate_jsonl_file(dataset_file)
+    valid, training_samples = validate_and_prepare_dataset(dataset_file)
     if not valid:
         sys.exit(1)
 
-    if not args.api_key:
-        print("\n[!] API Key Google Gemini belum diberikan.")
-        print("    Contoh pemanggilan:")
-        print(f"    python {os.path.basename(__file__)} --api-key AIzaSyYourKeyHere")
-        print("    Atau buka file 'PANDUAN_TRAINING_AI.md' untuk panduan visual di browser.")
-        sys.exit(0)
+    api_key = args.api_key.strip()
+    if not api_key:
+        print("\n" + "=" * 55)
+        print("🔑 AUTENTIKASI GOOGLE GEMINI API KEY")
+        print("=" * 55)
+        print("Untuk melatih model di Google AI Studio, diperlukan Gemini API Key.")
+        print("(Dapatkan gratis di https://aistudio.google.com/app/apikey)\n")
+        try:
+            user_input = input("Masukkan Gemini API Key Anda (atau tekan Enter untuk batal): ").strip()
+            if user_input:
+                api_key = user_input
+            else:
+                print("\n[i] Pelatihan dibatalkan. Anda dapat menjalankan kembali kapan saja.")
+                sys.exit(0)
+        except (KeyboardInterrupt, EOFError):
+            print("\n[i] Dibatalkan oleh pengguna.")
+            sys.exit(0)
 
-    run_fine_tuning(args.api_key, dataset_file, args.model_name, args.epochs)
+    run_fine_tuning(api_key, training_samples, args.model_name, args.epochs)
 
 if __name__ == "__main__":
     main()

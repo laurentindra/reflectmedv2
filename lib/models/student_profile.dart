@@ -6,6 +6,7 @@ class StudentProfile {
   String teachingHospital;
   String supervisorName; // Nama DPJP / Dosen Pembimbing
   String geminiApiKey;
+  String geminiModelName;
 
   StudentProfile({
     this.fullName = 'dr. Muda / Mahasiswa Kedokteran',
@@ -15,6 +16,7 @@ class StudentProfile {
     this.teachingHospital = 'RSUP Pendidikan Utama',
     this.supervisorName = 'dr. Sp.PD, Subsp. (K)',
     this.geminiApiKey = '',
+    this.geminiModelName = 'gemini-1.5-flash',
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +27,7 @@ class StudentProfile {
     'teachingHospital': teachingHospital,
     'supervisorName': supervisorName,
     'geminiApiKey': geminiApiKey,
+    'geminiModelName': geminiModelName,
   };
 
   factory StudentProfile.fromJson(Map<String, dynamic> json) => StudentProfile(
@@ -35,5 +38,6 @@ class StudentProfile {
     teachingHospital: json['teachingHospital'] ?? 'RSUP Pendidikan Utama',
     supervisorName: json['supervisorName'] ?? 'dr. Sp.PD, Subsp. (K)',
     geminiApiKey: json['geminiApiKey'] ?? '',
+    geminiModelName: json['geminiModelName'] ?? 'gemini-1.5-flash',
   );
 }

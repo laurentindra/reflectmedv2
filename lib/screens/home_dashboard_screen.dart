@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../models/gibbs_reflection.dart';
 import '../models/student_profile.dart';
 import '../services/storage_service.dart';
 import 'gibbs_report_screen.dart';
+import 'main_navigation_scaffold.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({Key? key}) : super(key: key);
@@ -36,457 +38,580 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.parchmentBg,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primaryTeal)),
+      );
+    }
+
+    final gibbsStages = [
+      {'num': '01', 'name': 'Deskripsi', 'score': 95, 'color': AppTheme.stageDeskripsi},
+      {'num': '02', 'name': 'Perasaan', 'score': 88, 'color': AppTheme.stagePerasaan},
+      {'num': '03', 'name': 'Evaluasi', 'score': 72, 'color': AppTheme.stageEvaluasi},
+      {'num': '04', 'name': 'Analisis', 'score': 65, 'color': AppTheme.stageAnalisis},
+      {'num': '05', 'name': 'Kesimpulan', 'score': 80, 'color': AppTheme.stageKesimpulan},
+      {'num': '06', 'name': 'Rencana Aksi', 'score': 58, 'color': AppTheme.stageRencana},
+    ];
+
+    final recentCases = [
+      {
+        'id': '012',
+        'title': 'Penanganan Pasien Hipertensi Krisis',
+        'dept': 'KARDIOLOGI',
+        'date': '15 SEP',
+        'score': 82,
+        'color': AppTheme.catKardiologi,
+      },
+      {
+        'id': '011',
+        'title': 'Kesalahan Dosis Obat pada Pediatri',
+        'dept': 'FARMAKOLOGI',
+        'date': '12 SEP',
+        'score': 91,
+        'color': AppTheme.primaryTeal,
+      },
+      {
+        'id': '010',
+        'title': 'Komunikasi dengan Keluarga Pasien',
+        'dept': 'KOMUNIKASI',
+        'date': '09 SEP',
+        'score': 76,
+        'color': AppTheme.catKomunikasi,
+      },
+    ];
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F8F8),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryTeal))
-          : SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: AppTheme.parchmentBg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. TOP HEADER: DATE & NOTIFICATION BELL
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // 1. MEDIREFLECT TEAL HEADER (Matching DASHBOARD.png)
-                  Container(
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppTheme.primaryTeal, AppTheme.primaryTealDark],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(24),
-                        bottomRight: Radius.circular(24),
-                      ),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(16, 44, 16, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Top Bar: Logo & Bell
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Image.asset(
-                              'assets/images/logoo.png',
-                              height: 32,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => Image.asset(
-                                'assets/images/logo.png',
-                                height: 32,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Text(
-                                  'ReflectMed AI',
-                                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                            ),
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: const [
-                                  Icon(Icons.notifications_none, color: Colors.white, size: 20),
-                                  Positioned(
-                                    right: 8,
-                                    top: 8,
-                                    child: CircleAvatar(radius: 3.5, backgroundColor: AppTheme.accentAmber),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Date & Greeting
-                        const Text(
-                          'Senin, 22 Juni 2026',
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Selamat Pagi, ${_profile.fullName}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Rotasi ${_profile.currentDepartment} — ${_profile.teachingHospital}',
-                          style: const TextStyle(color: AppTheme.accentCyan, fontSize: 11.5, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Streak & Badges Row
-                        Row(
-                          children: [
-                            _buildStreakBadge(Icons.local_fire_department, '7 hari streak'),
-                            const SizedBox(width: 8),
-                            _buildStreakBadge(Icons.star, '24 refleksi'),
-                            const SizedBox(width: 8),
-                            _buildStreakBadge(Icons.military_tech_outlined, 'Level 4'),
-                          ],
-                        ),
-                      ],
+                  Text(
+                    'SELASA, 22 SEPTEMBER',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      color: AppTheme.textMuted,
                     ),
                   ),
-
-                  // 2. SCROLLABLE CONTENT BODY
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  InkWell(
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Semua notifikasi pembimbing sudah dibaca.')),
+                      );
+                    },
+                    child: Stack(
+                      clipBehavior: Clip.none,
                       children: [
-                        // Floating Reminder Card
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF7ED),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.alarm, color: Color(0xFFD97706), size: 20),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
-                                    Text(
-                                      'Pengingat Refleksi',
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Kasus hipertensi emergensi tadi — tulis sekarang sebelum terlupakan!',
-                                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.3),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primaryTeal,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  elevation: 0,
-                                ),
-                                onPressed: () {
-                                  // Switch to reflection form
-                                },
-                                child: const Text('Mulai', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                              ),
-                            ],
+                        const Icon(Icons.notifications_none, size: 22, color: AppTheme.textInk),
+                        Positioned(
+                          right: 1,
+                          top: 1,
+                          child: Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFC05621),
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 20),
-
-                        // Section: Mulai Refleksi
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
-                            Text(
-                              'Mulai Refleksi',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                            ),
-                            Text(
-                              'Lihat semua',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        // 4 Grid Cards
-                        Row(
-                          children: [
-                            Expanded(child: _buildGridActionCard('Kasus hari ini', Icons.medical_services_outlined, const Color(0xFFE0F2FE), const Color(0xFF0284C7))),
-                            const SizedBox(width: 10),
-                            Expanded(child: _buildGridActionCard('Momen emosional', Icons.favorite_border, const Color(0xFFE6FFFA), const Color(0xFF0D9488))),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(child: _buildGridActionCard('Belajar dari kesalahan', Icons.book_outlined, const Color(0xFFFEF3C7), const Color(0xFFD97706))),
-                            const SizedBox(width: 10),
-                            Expanded(child: _buildGridActionCard('Kerja tim klinis', Icons.people_outline, const Color(0xFFF3E8FF), const Color(0xFF7E22CE))),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Section: Perkembangan Kompetensi
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
-                            Text(
-                              'Perkembangan Kompetensi',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                            ),
-                            Text(
-                              'Detail',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Column(
-                            children: [
-                              _buildCompetencyBar('Clinical Reasoning', 0.78, '78%'),
-                              const SizedBox(height: 10),
-                              _buildCompetencyBar('Komunikasi Pasien', 0.85, '85%'),
-                              const SizedBox(height: 10),
-                              _buildCompetencyBar('Profesionalisme', 0.92, '92%'),
-                              const SizedBox(height: 10),
-                              _buildCompetencyBar('Empati & Humanisme', 0.70, '70%'),
-                              const SizedBox(height: 12),
-                              InkWell(
-                                onTap: () {},
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF0FDFA),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFF99F6E4)),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: const [
-                                      Icon(Icons.chat_bubble_outline, size: 14, color: Color(0xFF0F766E)),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Tanya AI Guide untuk insight lebih dalam',
-                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F766E)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Section: Refleksi Terbaru
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
-                            Text(
-                              'Refleksi Terbaru',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                            ),
-                            Text(
-                              'Lihat semua',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        _buildRecentReflectCard('Kasus Gagal Jantung Akut', 'Rotasi Kardiologi • Kemarin', 0.85, '85%', Icons.favorite_border, const Color(0xFFFEE2E2), const Color(0xFFEF4444)),
-                        const SizedBox(height: 8),
-                        _buildRecentReflectCard('Komunikasi Berita Buruk', 'Rotasi Onkologi • 3 hari lalu', 0.72, '72%', Icons.chat_bubble_outline, const Color(0xFFE0F2FE), const Color(0xFF0284C7)),
-                        const SizedBox(height: 8),
-                        _buildRecentReflectCard('Prosedur Lumbal Pungsi', 'Rotasi Neurologi • 1 minggu lalu', 0.91, '91%', Icons.psychology, const Color(0xFFE0E7FF), const Color(0xFF4338CA)),
-                        const SizedBox(height: 16),
-
-                        // Donald Schön Quote Card
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0FDFA),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFF99F6E4)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Row(
-                                children: [
-                                  Icon(Icons.auto_awesome, size: 14, color: AppTheme.primaryTeal),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Refleksi Hari Ini',
-                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                '"Refleksi bukan tentang menyalahkan diri sendiri, tapi tentang memahami dan tumbuh bersama pengalaman."',
-                                style: TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Color(0xFF0F172A), height: 1.4),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                '— Donald Schön, Reflective Practitioner',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0F766E)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
                       ],
                     ),
                   ),
                 ],
               ),
-            ),
-    );
-  }
+              const SizedBox(height: 18),
 
-  Widget _buildStreakBadge(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 13),
-          const SizedBox(width: 4),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
+              // 2. GREETING & DOCTOR IDENTITY
+              Text(
+                'Selamat datang kembali,',
+                style: GoogleFonts.newsreader(
+                  fontSize: 16,
+                  color: AppTheme.textMuted,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _profile.fullName.isNotEmpty ? _profile.fullName : 'dr. Ahmad Fauzi',
+                style: GoogleFonts.newsreader(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textInk,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'PPDS INTERNA · FKUI · TAHUN II',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                  color: AppTheme.primaryTeal,
+                ),
+              ),
+              const SizedBox(height: 20),
 
-  Widget _buildGridActionCard(String title, IconData icon, Color bgColor, Color iconColor) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompetencyBar(String label, double value, String percentage) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF334155))),
-            Text(percentage, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: LinearProgressIndicator(
-            value: value,
-            backgroundColor: const Color(0xFFE2E8F0),
-            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryTeal),
-            minHeight: 6,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentReflectCard(String title, String subtitle, double progress, String progressText, IconData icon, Color iconBg, Color iconColor) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                const SizedBox(height: 4),
-                Row(
+              // 3. STATS ROW (12 REFLEKSI | 07 STREAK | 04 SIKLUS | 87 SKOR)
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Color(0xFFE5DDD1), width: 1),
+                    bottom: BorderSide(color: Color(0xFFE5DDD1), width: 1),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Row(
                   children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: const Color(0xFFE2E8F0),
-                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryTeal),
-                          minHeight: 4,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(progressText, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppTheme.primaryTeal)),
+                    _buildStatCol(_reflections.isNotEmpty ? (_reflections.length < 10 ? '0${_reflections.length}' : '${_reflections.length}') : '12', 'REFLEKSI'),
+                    Container(width: 1, height: 36, color: const Color(0xFFE5DDD1)),
+                    _buildStatCol('07', 'STREAK'),
+                    Container(width: 1, height: 36, color: const Color(0xFFE5DDD1)),
+                    _buildStatCol('04', 'SIKLUS'),
+                    Container(width: 1, height: 36, color: const Color(0xFFE5DDD1)),
+                    _buildStatCol('87', 'SKOR'),
                   ],
                 ),
-              ],
+              ),
+              const SizedBox(height: 20),
+
+              // 4. FEATURED AI CARD (Deep Teal rounded card)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryTeal,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryTeal.withValues(alpha: 0.18),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.lightbulb_outline, size: 16, color: Color(0xFF80CBC4)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'CATATAN REFLECTMED AI',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.4,
+                            color: const Color(0xFFB2DFDB),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Fokuskan sesi berikutnya pada tahap Rencana Aksi — skormu masih 58%.',
+                      style: GoogleFonts.newsreader(
+                        fontSize: 16,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.white,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    GestureDetector(
+                      onTap: () {
+                        // Switch to reflection form tab (index 2)
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainNavigationScaffold(initialIndex: 2),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'MULAI REFLEKSI',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                              color: const Color(0xFF80CBC4),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_forward, size: 14, color: Color(0xFF80CBC4)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // 5. AKSI CEPAT (3 Cards)
+              Text(
+                'AKSI CEPAT',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                  color: AppTheme.textMuted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildQuickActionCard(
+                      icon: Icons.edit_outlined,
+                      title: 'Refleksi\nBaru',
+                      onTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainNavigationScaffold(initialIndex: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildQuickActionCard(
+                      icon: Icons.headphones_outlined,
+                      title: 'Tanya\nReflectMed\nAI',
+                      onTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainNavigationScaffold(initialIndex: 1),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildQuickActionCard(
+                      icon: Icons.show_chart,
+                      title: 'Progres\n',
+                      onTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainNavigationScaffold(initialIndex: 3),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+
+              // 6. PROGRES SIKLUS GIBBS
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'PROGRES SIKLUS GIBBS',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MainNavigationScaffold(initialIndex: 3),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'LIHAT SEMUA →',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: AppTheme.primaryTeal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // 6 Progress rows
+              Column(
+                children: gibbsStages.map((stage) {
+                  final score = stage['score'] as int;
+                  final color = stage['color'] as Color;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          stage['num'] as String,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.6,
+                            color: AppTheme.textLight,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 86,
+                          child: Text(
+                            stage['name'] as String,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textInk,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: score / 100,
+                              backgroundColor: const Color(0xFFE8DFD3),
+                              valueColor: AlwaysStoppedAnimation<Color>(color),
+                              minHeight: 7,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        SizedBox(
+                          width: 24,
+                          child: Text(
+                            '$score',
+                            textAlign: TextAlign.end,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 28),
+
+              // 7. REFLEKSI TERBARU
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'REFLEKSI TERBARU',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MainNavigationScaffold(initialIndex: 4),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'ARSIP →',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: AppTheme.primaryTeal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // 3 Recent Cases
+              Column(
+                children: recentCases.map((item) {
+                  final color = item['color'] as Color;
+                  return InkWell(
+                    onTap: () {
+                      final dummy = GibbsReflection(
+                        id: item['id'] as String,
+                        createdAt: DateTime.now(),
+                        title: item['title'] as String,
+                        department: item['dept'] as String,
+                        description: 'Ringkasan refleksi klinis kasus.',
+                      );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => GibbsReportScreen(reflection: dummy),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: Color(0xFFEAE3D9), width: 1),
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['id'] as String,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textLight,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            width: 3,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item['title'] as String,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.textInk,
+                                    height: 1.25,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${item['dept']} · ${item['date']}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.8,
+                                    color: AppTheme.textLight,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${item['score']}',
+                            style: GoogleFonts.newsreader(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCol(String value, String label) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.newsreader(
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textInk,
+              height: 1.0,
             ),
           ),
-          const SizedBox(width: 6),
-          const Icon(Icons.chevron_right, size: 18, color: Color(0xFF94A3B8)),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+              color: AppTheme.textLight,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionCard({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 104,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceWarm,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.lightBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(icon, size: 22, color: AppTheme.primaryTeal),
+            Text(
+              title,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textInk,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

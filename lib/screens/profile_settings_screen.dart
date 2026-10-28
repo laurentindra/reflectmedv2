@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../models/student_profile.dart';
 import '../services/storage_service.dart';
 import 'ai_training_studio_screen.dart';
+import 'onboarding_welcome_screen.dart';
+import 'login_auth_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({Key? key}) : super(key: key);
@@ -14,7 +17,6 @@ class ProfileSettingsScreen extends StatefulWidget {
 class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   StudentProfile _profile = StudentProfile();
   bool _remindersEnabled = true;
-  bool _darkMode = false;
   bool _researchConsent = true;
 
   @override
@@ -31,46 +33,105 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   void _openEditDialog() {
-    final nameCtrl = TextEditingController(text: _profile.fullName);
-    final nimCtrl = TextEditingController(text: _profile.studentId);
-    final univCtrl = TextEditingController(text: _profile.university);
-    final deptCtrl = TextEditingController(text: _profile.currentDepartment);
-    final hospCtrl = TextEditingController(text: _profile.teachingHospital);
-    final supCtrl = TextEditingController(text: _profile.supervisorName);
+    final nameCtrl = TextEditingController(text: _profile.fullName.isNotEmpty ? _profile.fullName : 'dr. Ahmad Fauzi');
+    final nimCtrl = TextEditingController(text: _profile.studentId.isNotEmpty ? _profile.studentId : '0119283746');
+    final deptCtrl = TextEditingController(text: _profile.currentDepartment.isNotEmpty ? _profile.currentDepartment : 'Ilmu Penyakit Dalam');
+    final hospCtrl = TextEditingController(text: _profile.teachingHospital.isNotEmpty ? _profile.teachingHospital : 'RSUP Nasional Cipto Mangunkusumo');
+    final supCtrl = TextEditingController(text: _profile.supervisorName.isNotEmpty ? _profile.supervisorName : 'Prof. Dr. Siti Rahayu, SpPD-KKV');
     final keyCtrl = TextEditingController(text: _profile.geminiApiKey);
+    final modelCtrl = TextEditingController(text: _profile.geminiModelName);
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit Profil & Pengaturan', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        backgroundColor: AppTheme.parchmentBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Edit Profil Dokter & Pengaturan AI',
+          style: GoogleFonts.newsreader(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textInk),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nama Lengkap')),
-              TextField(controller: nimCtrl, decoration: const InputDecoration(labelText: 'NIM')),
-              TextField(controller: deptCtrl, decoration: const InputDecoration(labelText: 'Stase Aktif')),
-              TextField(controller: hospCtrl, decoration: const InputDecoration(labelText: 'RS Pendidikan')),
-              TextField(controller: supCtrl, decoration: const InputDecoration(labelText: 'Nama DPJP')),
-              TextField(controller: keyCtrl, decoration: const InputDecoration(labelText: 'Gemini API Key (Opsional)')),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Nama Lengkap'),
+              ),
+              TextField(
+                controller: nimCtrl,
+                decoration: const InputDecoration(labelText: 'NIM / Nomor Registrasi'),
+              ),
+              TextField(
+                controller: deptCtrl,
+                decoration: const InputDecoration(labelText: 'Stase / Departemen Aktif'),
+              ),
+              TextField(
+                controller: hospCtrl,
+                decoration: const InputDecoration(labelText: 'RS Pendidikan'),
+              ),
+              TextField(
+                controller: supCtrl,
+                decoration: const InputDecoration(labelText: 'Nama Dokter Pendidik Klinis (DPJP)'),
+              ),
+              TextField(
+                controller: keyCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Gemini API Key',
+                  hintText: 'AIzaSy...',
+                  helperText: 'Diperlukan untuk menghubungkan AI ke Google Cloud',
+                ),
+              ),
+              TextField(
+                controller: modelCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'ID Model AI (Base / Tuned Model)',
+                  hintText: 'gemini-1.5-flash atau tunedModels/...',
+                  helperText: 'Masukkan nama model hasil training Google AI Studio',
+                ),
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Batal', style: GoogleFonts.plusJakartaSans(color: AppTheme.textMuted)),
+          ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryTeal,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
+              final rawKey = keyCtrl.text.trim();
+              if (rawKey.isNotEmpty && !rawKey.startsWith('AIzaSy')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: const Color(0xFFB45309),
+                    behavior: SnackBarBehavior.floating,
+                    content: Text(
+                      'Perhatian: Google Gemini API Key biasanya diawali "AIzaSy...". Pastikan menyalin dari aistudio.google.com/app/apikey',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    duration: const Duration(seconds: 5),
+                  ),
+                );
+              }
               _profile.fullName = nameCtrl.text.trim();
               _profile.studentId = nimCtrl.text.trim();
               _profile.currentDepartment = deptCtrl.text.trim();
               _profile.teachingHospital = hospCtrl.text.trim();
               _profile.supervisorName = supCtrl.text.trim();
-              _profile.geminiApiKey = keyCtrl.text.trim();
+              _profile.geminiApiKey = rawKey;
+              _profile.geminiModelName = modelCtrl.text.trim().isNotEmpty ? modelCtrl.text.trim() : 'gemini-1.5-flash';
               await StorageService.saveProfile(_profile);
-              setState(() {});
-              Navigator.pop(ctx);
+              if (mounted) {
+                setState(() {});
+                Navigator.pop(ctx);
+              }
             },
-            child: const Text('Simpan'),
+            child: Text('Simpan', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -80,90 +141,103 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F8F8),
+      backgroundColor: AppTheme.parchmentBg,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. TEAL HEADER (Matching AI Reflection App Design-1.png)
+              // 1. TOP HEADER & IDENTITY CARD (Warm Parchment & Deep Scholarly Teal)
               Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppTheme.primaryTeal, AppTheme.primaryTealDark],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
+                  color: AppTheme.surfaceWarm,
+                  border: Border(
+                    bottom: BorderSide(color: Color(0xFFE5DDD1), width: 1),
                   ),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const SizedBox(width: 32),
-                        const Text(
-                          'Medireflect AI',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+                        Text(
+                          'PENGATURAN & PROFIL',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: AppTheme.textMuted,
+                          ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.edit_note, color: Colors.white, size: 22),
+                          icon: const Icon(Icons.edit_note, color: AppTheme.primaryTeal, size: 24),
                           onPressed: _openEditDialog,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
 
                     // User Profile Card
                     Row(
                       children: [
                         Container(
-                          width: 52,
-                          height: 52,
+                          width: 56,
+                          height: 56,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.white.withOpacity(0.2),
-                            border: Border.all(color: Colors.white, width: 2),
+                            color: AppTheme.parchmentBg,
+                            border: Border.all(color: AppTheme.primaryTeal, width: 1.5),
                           ),
-                          child: const Icon(Icons.person_outline, color: Colors.white, size: 28),
+                          child: const Icon(Icons.person_outline, color: AppTheme.primaryTeal, size: 30),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _profile.fullName,
-                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                _profile.fullName.isNotEmpty ? _profile.fullName : 'dr. Ahmad Fauzi',
+                                style: GoogleFonts.newsreader(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textInk,
+                                ),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Mahasiswa Koas · NIM ${_profile.studentId}',
-                                style: const TextStyle(color: Color(0xFFE0F2FE), fontSize: 11),
+                                'PPDS INTERNA · FKUI · TAHUN II',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
+                                  color: AppTheme.primaryTeal,
+                                ),
                               ),
+                              const SizedBox(height: 2),
                               Text(
-                                '${_profile.university} · ${_profile.currentDepartment}',
-                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 10),
+                                '${_profile.teachingHospital.isNotEmpty ? _profile.teachingHospital : "RSUP Nasional Cipto Mangunkusumo"}',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  color: AppTheme.textMuted,
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
 
                     // 3 Metric Pills
                     Row(
                       children: [
-                        _buildStatPill('24', 'Refleksi'),
+                        _buildStatPill('12', 'Refleksi'),
                         const SizedBox(width: 8),
-                        _buildStatPill('3/8', 'Rotasi Selesai'),
+                        _buildStatPill('07', 'Streak Hari'),
                         const SizedBox(width: 8),
-                        _buildStatPill('82%', 'Kompetensi'),
+                        _buildStatPill('87', 'Rata Skor'),
                       ],
                     ),
                   ],
@@ -172,33 +246,41 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
               // 2. SETTINGS CONTENT
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
                     // Data Protection Notice
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDFA),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF99F6E4)),
+                        color: AppTheme.surfaceWarm,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.lightBorder),
                       ),
                       child: Row(
-                        children: const [
-                          Icon(Icons.shield_outlined, color: AppTheme.primaryTeal, size: 22),
-                          SizedBox(width: 10),
+                        children: [
+                          const Icon(Icons.shield_outlined, color: AppTheme.primaryTeal, size: 22),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Data Anda Terlindungi',
-                                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF0F766E)),
+                                  'Kerahasiaan Medis & Privasi Terlindungi',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryTeal,
+                                  ),
                                 ),
-                                SizedBox(height: 2),
+                                const SizedBox(height: 3),
                                 Text(
-                                  'Refleksi Anda dienkripsi end-to-end dan tidak pernah dibagikan tanpa persetujuan Anda. Sesuai UU PDP & standar etika medis.',
-                                  style: TextStyle(fontSize: 10, color: Color(0xFF334155), height: 1.35),
+                                  'Refleksi Anda dienkripsi end-to-end sesuai standar etika kedokteran & UU PDP. Identitas pasien disamarkan secara otomatis.',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10.5,
+                                    color: AppTheme.textMuted,
+                                    height: 1.35,
+                                  ),
                                 ),
                               ],
                             ),
@@ -208,21 +290,48 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Group: AKUN
-                    _buildGroupCard('AKUN', [
-                      _buildMenuItem(Icons.person_outline, 'Profil & Identitas', 'Nama, NIM, institusi', onTap: _openEditDialog),
-                      _buildMenuItem(Icons.verified_user_outlined, 'Autentikasi SSO', 'Terhubung: ID Kampus', statusTag: 'Aktif'),
-                      _buildMenuItem(Icons.lock_outline, 'Privasi & Keamanan', 'Enkripsi data, sesi login'),
+                    // Group: TAMPILAN & NAVIGASI DESAIN
+                    _buildGroupCard('NAVIGASI & DESAIN', [
+                      _buildMenuItem(
+                        Icons.preview_outlined,
+                        'Layar Selamat Datang (Onboarding)',
+                        'Pratinjau layar pembuka edisi Vol. I · 2026',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const OnboardingWelcomeScreen()),
+                          );
+                        },
+                      ),
+                      _buildMenuItem(
+                        Icons.login_outlined,
+                        'Layar Autentikasi / SSO',
+                        'Pratinjau layar masuk dengan SSO Kampus',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginAuthScreen()),
+                          );
+                        },
+                      ),
                     ]),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
+
+                    // Group: AKUN
+                    _buildGroupCard('AKUN DOKTER', [
+                      _buildMenuItem(Icons.person_outline, 'Profil & Identitas', 'Nama, institusi, DPJP', onTap: _openEditDialog),
+                      _buildMenuItem(Icons.verified_user_outlined, 'Autentikasi SSO Kampus', 'Terhubung: FKUI SSO ID', statusTag: 'Aktif'),
+                      _buildMenuItem(Icons.lock_outline, 'Keamanan Data Refleksi', 'Enkripsi RSA-2048 & TLS 1.3'),
+                    ]),
+                    const SizedBox(height: 14),
 
                     // Group: REFLEKSI & PEMBELAJARAN
-                    _buildGroupCard('REFLEKSI & PEMBELAJARAN', [
+                    _buildGroupCard('REFLEKSI & EDUKASI', [
                       _buildMenuItem(
                         Icons.model_training,
                         'Studio Pelatihan AI (Educator)',
-                        'Kalibrasi persona, bank kasus & fine-tuning dataset',
-                        statusTag: 'Mode Edukator',
+                        'Kalibrasi persona konsulen & fine-tuning',
+                        statusTag: 'Mode Dosen',
                         onTap: () {
                           Navigator.push(
                             context,
@@ -230,78 +339,68 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           );
                         },
                       ),
-                      _buildToggleItem(Icons.notifications_none, 'Pengingat Refleksi', 'Setelah rotasi & kasus penting', _remindersEnabled, (v) => setState(() => _remindersEnabled = v)),
-                      _buildMenuItem(Icons.bookmark_border, 'Model Refleksi', 'Saat ini: Siklus Gibbs'),
-                    ]),
-                    const SizedBox(height: 12),
-
-                    // Group: TAMPILAN
-                    _buildGroupCard('TAMPILAN', [
-                      _buildToggleItem(Icons.dark_mode_outlined, 'Mode Gelap', 'Tampilan malam hari', _darkMode, (v) => setState(() => _darkMode = v)),
-                      _buildMenuItem(Icons.star_outline, 'Aksesibilitas', 'Ukuran teks & kontras'),
-                    ]),
-                    const SizedBox(height: 12),
-
-                    // Group: BANTUAN & KESEJAHTERAAN
-                    _buildGroupCard('BANTUAN & KESEJAHTERAAN', [
-                      _buildMenuItem(Icons.favorite_border, 'Layanan Konseling', 'wellbeing@fk.unair.ac.id'),
-                      _buildMenuItem(Icons.help_outline, 'Panduan Pengguna', 'Tutorial & FAQ'),
-                    ]),
-                    const SizedBox(height: 12),
-
-                    // Group: KONTRIBUSI RISET
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      _buildToggleItem(
+                        Icons.notifications_none,
+                        'Pengingat Refleksi Berkala',
+                        'Pengingat setelah jaga IGD & rotasi stase',
+                        _remindersEnabled,
+                        (v) => setState(() => _remindersEnabled = v),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(14, 12, 14, 4),
-                            child: Text('KONTRIBUSI RISET', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                            child: Text(
-                              'Data refleksi Anda (anonim) membantu pendidik memahami tren pembelajaran kohort untuk perbaikan kurikulum.',
-                              style: TextStyle(fontSize: 10.5, color: Color(0xFF475569), height: 1.35),
-                            ),
-                          ),
-                          const Divider(height: 1),
-                          SwitchListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                            title: const Text('Izinkan data anonim untuk riset', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                            value: _researchConsent,
-                            activeColor: AppTheme.primaryTeal,
-                            onChanged: (v) => setState(() => _researchConsent = v),
-                          ),
-                        ],
-                      ),
-                    ),
+                      _buildMenuItem(Icons.menu_book_outlined, 'Pedoman Siklus Gibbs', 'Metode 6 tahap refleksi terstruktur'),
+                    ]),
                     const SizedBox(height: 14),
+
+                    // Group: RISET & ETIKA
+                    _buildGroupCard('KONTRIBUSI RISET KLINIS', [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        child: Text(
+                          'Data refleksi yang telah disanitasi secara anonim membantu dekanat & KPS memahami beban belajar stase.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10.5,
+                            color: AppTheme.textMuted,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                      _buildToggleItem(
+                        Icons.analytics_outlined,
+                        'Izinkan Anonimitas untuk Riset',
+                        'Membantu evaluasi pendidikan kedokteran',
+                        _researchConsent,
+                        (v) => setState(() => _researchConsent = v),
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
 
                     // Logout Button
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Color(0xFFFECACA)),
-                        backgroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 44),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        foregroundColor: AppTheme.catKardiologi,
+                        side: const BorderSide(color: Color(0xFFE5DDD1)),
+                        backgroundColor: AppTheme.surfaceWarm,
+                        minimumSize: const Size(double.infinity, 46),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       icon: const Icon(Icons.logout, size: 16),
-                      label: const Text('Keluar dari Akun', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      onPressed: () {},
+                      label: Text(
+                        'Keluar ke Layar Pembuka',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      onPressed: () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (_) => const OnboardingWelcomeScreen()),
+                          (route) => false,
+                        );
+                      },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
-                    const Center(
+                    Center(
                       child: Text(
-                        'MedReflect v1.0.0 · FK President University / FK Unair\nSesuai UU PDP & Standar Etika Medis Indonesia',
-                        style: TextStyle(fontSize: 9.5, color: Color(0xFF94A3B8), height: 1.4),
+                        'ReflectMed AI · Jurnal Refleksi Klinis Vol. I · 2026\nSesuai Pedoman AMEE Guide 44 & Standar Konsil Kedokteran Indonesia',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 9.5, color: AppTheme.textLight, height: 1.4),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -319,15 +418,31 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   Widget _buildStatPill(String val, String lbl) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
+          color: AppTheme.parchmentBg,
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.lightBorder),
         ),
         child: Column(
           children: [
-            Text(val, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-            Text(lbl, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+            Text(
+              val,
+              style: GoogleFonts.newsreader(
+                color: AppTheme.textInk,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              lbl,
+              style: GoogleFonts.plusJakartaSans(
+                color: AppTheme.textLight,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
@@ -337,17 +452,26 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   Widget _buildGroupCard(String title, List<Widget> items) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: AppTheme.surfaceWarm,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.lightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-            child: Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            child: Text(
+              title,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: AppTheme.textLight,
+              ),
+            ),
           ),
+          const Divider(height: 1, color: Color(0xFFE5DDD1)),
           ...items,
         ],
       ),
@@ -358,33 +482,62 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
             Container(
               width: 32,
               height: 32,
-              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: AppTheme.parchmentBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.lightBorder),
+              ),
               child: Icon(icon, size: 16, color: AppTheme.primaryTeal),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                  Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                  Text(
+                    title,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textInk,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 10.5,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
                 ],
               ),
             ),
             if (statusTag != null)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(6)),
-                child: Text(statusTag, style: const TextStyle(color: Color(0xFF059669), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.parchmentBg,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppTheme.primaryTeal),
+                ),
+                child: Text(
+                  statusTag,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: AppTheme.primaryTeal,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               )
             else
-              const Icon(Icons.chevron_right, size: 16, color: Color(0xFF94A3B8)),
+              const Icon(Icons.chevron_right, size: 16, color: AppTheme.textLight),
           ],
         ),
       ),
@@ -393,28 +546,46 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
   Widget _buildToggleItem(IconData icon, String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       child: Row(
         children: [
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              color: AppTheme.parchmentBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.lightBorder),
+            ),
             child: Icon(icon, size: 16, color: AppTheme.primaryTeal),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                Text(
+                  title,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textInk,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 10.5,
+                    color: AppTheme.textMuted,
+                  ),
+                ),
               ],
             ),
           ),
           Switch(
             value: value,
-            activeColor: AppTheme.primaryTeal,
+            activeThumbColor: AppTheme.primaryTeal,
             onChanged: onChanged,
           ),
         ],

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/theme/app_theme.dart';
 
 class QuickScenarioChips extends StatelessWidget {
   final Function(String prompt) onSelectScenario;
