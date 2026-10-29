@@ -15,6 +15,10 @@ class TalkingMentorAvatar extends StatefulWidget {
   final MentorState state;
   final String? activeQuestion;
   final VoidCallback? onReplayVoice;
+  final VoidCallback? onStopVoice;
+  final VoidCallback? onToggleMute;
+  final bool isSpeaking;
+  final bool isMuted;
   final bool showSpeechBubble;
 
   const TalkingMentorAvatar({
@@ -22,6 +26,10 @@ class TalkingMentorAvatar extends StatefulWidget {
     required this.state,
     this.activeQuestion,
     this.onReplayVoice,
+    this.onStopVoice,
+    this.onToggleMute,
+    this.isSpeaking = false,
+    this.isMuted = false,
     this.showSpeechBubble = true,
   }) : super(key: key);
 
@@ -81,13 +89,13 @@ class _TalkingMentorAvatarState extends State<TalkingMentorAvatar>
   @override
   void didUpdateWidget(TalkingMentorAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.state != widget.state) {
+    if (oldWidget.state != widget.state || oldWidget.isSpeaking != widget.isSpeaking) {
       _updateAnimationStates();
     }
   }
 
   void _updateAnimationStates() {
-    if (widget.state == MentorState.asking) {
+    if (widget.state == MentorState.asking || widget.isSpeaking) {
       _mouthController.repeat(reverse: true);
       _pulseController.repeat();
       _waveController.repeat(reverse: true);
@@ -257,14 +265,14 @@ class _TalkingMentorAvatarState extends State<TalkingMentorAvatar>
                         Text(
                           statusTitle,
                           style: GoogleFonts.newsreader(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textInk,
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: auraColor.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(6),
@@ -272,22 +280,57 @@ class _TalkingMentorAvatarState extends State<TalkingMentorAvatar>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(statusIcon, size: 10, color: auraColor),
-                              const SizedBox(width: 3),
+                              Icon(statusIcon, size: 9, color: auraColor),
+                              const SizedBox(width: 2.5),
                               Text(
                                 widget.state == MentorState.asking
-                                    ? 'BERBICARA'
+                                    ? 'BICARA'
                                     : (widget.state == MentorState.thinking ? 'BERPIKIR' : 'MENYIMAK'),
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 8.5,
+                                  fontSize: 8,
                                   fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.8,
+                                  letterSpacing: 0.6,
                                   color: auraColor,
                                 ),
                               ),
                             ],
                           ),
                         ),
+                        const Spacer(),
+                        if (widget.onToggleMute != null)
+                          InkWell(
+                            onTap: widget.onToggleMute,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: widget.isMuted
+                                    ? Colors.black.withOpacity(0.05)
+                                    : AppTheme.primaryTeal.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    widget.isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                                    size: 11,
+                                    color: widget.isMuted ? AppTheme.textLight : AppTheme.primaryTeal,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    widget.isMuted ? 'MUTE' : 'ON',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 7.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.4,
+                                      color: widget.isMuted ? AppTheme.textLight : AppTheme.primaryTeal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 3),
@@ -335,26 +378,71 @@ class _TalkingMentorAvatarState extends State<TalkingMentorAvatar>
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.25)),
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.format_quote_rounded,
-                    size: 18,
-                    color: AppTheme.primaryTeal,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      widget.activeQuestion!,
-                      style: GoogleFonts.newsreader(
-                        fontSize: 13.5,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w600,
-                        height: 1.4,
-                        color: AppTheme.textInk,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.format_quote_rounded,
+                        size: 18,
+                        color: AppTheme.primaryTeal,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.activeQuestion!,
+                          style: GoogleFonts.newsreader(
+                            fontSize: 13.5,
+                            fontStyle: FontStyle.italic,
+                            fontWeight: FontWeight.w600,
+                            height: 1.4,
+                            color: AppTheme.textInk,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (widget.onReplayVoice != null)
+                        InkWell(
+                          onTap: widget.isSpeaking ? widget.onStopVoice : widget.onReplayVoice,
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryTeal.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.25)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  widget.isSpeaking ? Icons.stop_circle_rounded : Icons.volume_up_rounded,
+                                  size: 14,
+                                  color: AppTheme.primaryTeal,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  widget.isSpeaking
+                                      ? 'Hentikan Suara'
+                                      : (widget.isMuted ? 'Suara Dibisukan' : 'Dengarkan Pertanyaan'),
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryTeal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),

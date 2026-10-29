@@ -7,6 +7,7 @@ import '../models/chat_message.dart';
 import '../models/student_profile.dart';
 import '../services/gemini_ai_service.dart';
 import '../services/storage_service.dart';
+import '../services/voice_over_service.dart';
 import '../widgets/talking_mentor_avatar.dart';
 import '../widgets/quick_scenario_chips.dart';
 import '../services/gibbs_extractor_service.dart';
@@ -24,6 +25,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GeminiAiService _aiService = GeminiAiService();
+  final VoiceOverService _voiceService = VoiceOverService();
 
   StudentProfile _profile = StudentProfile();
   List<ChatMessage> _messages = [];
@@ -46,12 +48,26 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
   @override
   void initState() {
     super.initState();
+    _voiceService.init().then((_) {
+      if (mounted) setState(() {});
+    });
+    _voiceService.onSpeechStarted = () {
+      if (mounted) {
+        setState(() => _isMentorSpeaking = true);
+      }
+    };
+    _voiceService.onSpeechCompleted = () {
+      if (mounted) {
+        setState(() => _isMentorSpeaking = false);
+      }
+    };
     _initChat();
   }
 
   @override
   void dispose() {
     _speakingTimer?.cancel();
+    _voiceService.stop();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -67,17 +83,23 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     return text.length > 130 ? '${text.substring(0, 130)}...' : text;
   }
 
-  void _triggerMentorSpeaking(String text) {
+  void _triggerMentorSpeaking(String text, {bool speakFull = false}) {
     _speakingTimer?.cancel();
+    final question = _extractQuestion(text);
+    final textToSpeak = speakFull ? text : (question.isNotEmpty ? question : text);
+
     setState(() {
       _isMentorSpeaking = true;
-      _activeQuestion = _extractQuestion(text);
+      _activeQuestion = question.isNotEmpty ? question : text;
     });
 
-    // Durasi animasi berbicara proporsional dengan panjang teks (min 6s, max 12s)
-    final durationSeconds = (text.length / 25).clamp(6, 12).toInt();
+    // Jalankan Voice Over audio sesungguhnya
+    _voiceService.speak(textToSpeak);
+
+    // Safety fallback timer untuk perangkat yang tidak memicu onComplete
+    final durationSeconds = (textToSpeak.length / 15).clamp(4, 18).toInt();
     _speakingTimer = Timer(Duration(seconds: durationSeconds), () {
-      if (mounted) {
+      if (mounted && !_voiceService.isSpeaking) {
         setState(() => _isMentorSpeaking = false);
       }
     });
@@ -542,6 +564,16 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
             TalkingMentorAvatar(
               state: mentorState,
               activeQuestion: _activeQuestion,
+              isSpeaking: _isMentorSpeaking || _voiceService.isSpeaking,
+              isMuted: _voiceService.isMuted,
+              onToggleMute: () async {
+                await _voiceService.toggleMute();
+                setState(() {});
+              },
+              onStopVoice: () async {
+                await _voiceService.stop();
+                setState(() => _isMentorSpeaking = false);
+              },
               onReplayVoice: () {
                 if (_messages.isNotEmpty) {
                   final lastAi = _messages.lastWhere((m) => !m.isUser, orElse: () => _messages.first);
@@ -836,9 +868,16 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      // Tombol Dengarkan / Ulangi Animasi Bertanya
+                      // Tombol Dengarkan / Hentikan Suara
                       InkWell(
-                        onTap: () => _triggerMentorSpeaking(msg.text),
+                        onTap: () {
+                          if (isCurrentlyPlaying) {
+                            _voiceService.stop();
+                            setState(() => _isMentorSpeaking = false);
+                          } else {
+                            _triggerMentorSpeaking(msg.text);
+                          }
+                        },
                         borderRadius: BorderRadius.circular(6),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
@@ -852,13 +891,15 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                isCurrentlyPlaying ? Icons.volume_up_rounded : Icons.record_voice_over_rounded,
+                                isCurrentlyPlaying ? Icons.stop_circle_rounded : Icons.record_voice_over_rounded,
                                 size: 12,
                                 color: isCurrentlyPlaying ? Colors.white : AppTheme.primaryTeal,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                isCurrentlyPlaying ? 'Mentor Sedang Bertanya...' : 'Dengarkan Pertanyaan',
+                                isCurrentlyPlaying
+                                    ? 'Hentikan Suara'
+                                    : (_voiceService.isMuted ? 'Suara Dibisukan' : 'Dengarkan Pertanyaan'),
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
