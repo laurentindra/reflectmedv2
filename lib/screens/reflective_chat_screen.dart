@@ -538,58 +538,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                 ),
               ),
 
-            // 2. HORIZONTAL GIBBS PHASE STRIP
-            Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFE5DDD1), width: 1),
-                ),
-              ),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _gibbsPhases.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 14),
-                itemBuilder: (ctx, i) {
-                  final phase = _gibbsPhases[i];
-                  final isActive = _activeStepIndex == i;
-                  final color = phase['color'] as Color;
-
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _activeStepIndex = i;
-                        const phasePrompts = [
-                          'Ceritakan apa yang sebenarnya terjadi secara objektif? Kapan, di mana, dan siapa yang terlibat?',
-                          'Apa yang Anda rasakan saat peristiwa itu terjadi dan sesudahnya? Ada rasa cemas, ragu, atau bersalah?',
-                          'Apa aspek yang menurut Anda berjalan baik, dan apa yang terasa kurang berhasil?',
-                          'Mengapa peristiwa tersebut terjadi seperti itu? Apa faktor klinis, komunikasi, atau sistem yang memengaruhinya?',
-                          'Apa pemahaman atau kesimpulan utama yang Anda peroleh tentang diri Anda dan situasi klinis ini?',
-                          'Jika situasi klinis serupa terjadi lagi di masa depan, apa rencana tindakan (SMART) yang akan Anda lakukan?',
-                        ];
-                        if (i < phasePrompts.length) {
-                          _activeQuestion = phasePrompts[i];
-                        }
-                      });
-                    },
-                    child: Center(
-                      child: Text(
-                        '${phase['code']} ${phase['name']}',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10.5,
-                          fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                          letterSpacing: 1.0,
-                          color: isActive ? color : AppTheme.textLight,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // 3. LIVING MENTOR TALKING AVATAR & PRESENCE BAR
+            // 2. LIVING MENTOR TALKING AVATAR & PRESENCE BAR
             TalkingMentorAvatar(
               state: mentorState,
               activeQuestion: _activeQuestion,
