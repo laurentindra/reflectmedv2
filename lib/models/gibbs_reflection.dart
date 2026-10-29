@@ -112,6 +112,8 @@ class GibbsReflection {
     return ((count / 6) * 100).round();
   }
 
+  bool get isComplete => completionPercentage >= 95;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'createdAt': createdAt.toIso8601String(),

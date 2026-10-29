@@ -17,14 +17,7 @@ class MainNavigationScaffold extends StatefulWidget {
 
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   late int _currentIndex;
-
-  final List<Widget> _screens = const [
-    HomeDashboardScreen(),
-    ReflectiveChatScreen(),
-    GibbsFormScreen(),
-    ProgressAnalyticsScreen(),
-    EPortfolioSyncScreen(),
-  ];
+  int _navVersion = 0;
 
   @override
   void initState() {
@@ -33,16 +26,27 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   }
 
   void _onTabTapped(int index) {
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+      _navVersion++;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      HomeDashboardScreen(key: ValueKey('home_$_navVersion')),
+      const ReflectiveChatScreen(), // Mempertahankan riwayat aktif dan animasi avatar
+      GibbsFormScreen(key: ValueKey('form_$_navVersion')),
+      ProgressAnalyticsScreen(key: ValueKey('analytics_$_navVersion')),
+      EPortfolioSyncScreen(key: ValueKey('portfolio_$_navVersion')),
+    ];
+
     return Scaffold(
       backgroundColor: AppTheme.parchmentBg,
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: Container(
         height: 74,

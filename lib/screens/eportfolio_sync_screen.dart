@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../models/gibbs_reflection.dart';
@@ -18,6 +19,7 @@ class EPortfolioSyncScreen extends StatefulWidget {
 class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
   String _selectedTab = 'SEMUA';
   List<GibbsReflection> _savedReflections = [];
+  final Set<String> _expandedIds = {};
   bool _isLoading = true;
 
   @override
@@ -29,80 +31,16 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final list = await StorageService.loadReflections();
-    setState(() {
-      _savedReflections = list;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _savedReflections = list;
+        _isLoading = false;
+        if (list.isNotEmpty) {
+          _expandedIds.add(list.first.id);
+        }
+      });
+    }
   }
-
-  // Sample static archive items matching screenshot 6
-  final List<Map<String, dynamic>> _portfolioItems = [
-    {
-      'id': '012',
-      'title': 'Penanganan Pasien Hipertensi Krisis',
-      'department': 'KARDIOLOGI',
-      'date': '15 SEP 2026',
-      'score': 82,
-      'status': 'TERVERIFIKASI',
-      'statusColor': AppTheme.stageKesimpulan,
-      'accentColor': AppTheme.catKardiologi,
-      'supervisor': 'Prof. Dr. Siti Rahayu, SpPD-KKV',
-      'progress': '6/6',
-      'expanded': true,
-    },
-    {
-      'id': '011',
-      'title': 'Kesalahan Dosis Obat pada Pasien Pediatri',
-      'department': 'FARMAKOLOGI',
-      'date': '12 SEP 2026',
-      'score': 91,
-      'status': 'TERVERIFIKASI',
-      'statusColor': AppTheme.stageKesimpulan,
-      'accentColor': AppTheme.primaryTeal,
-      'supervisor': 'dr. Bambang Irawan, Sp.A(K)',
-      'progress': '6/6',
-      'expanded': false,
-    },
-    {
-      'id': '010',
-      'title': 'Komunikasi dengan Keluarga Pasien Terminal',
-      'department': 'KOMUNIKASI',
-      'date': '09 SEP 2026',
-      'score': 76,
-      'status': 'MENUNGGU',
-      'statusColor': AppTheme.stageEvaluasi,
-      'accentColor': AppTheme.catKomunikasi,
-      'supervisor': 'dr. Maria Angela, Sp.PD',
-      'progress': '5/6',
-      'expanded': false,
-    },
-    {
-      'id': '009',
-      'title': 'Tindakan Lumbal Pungsi Pertama',
-      'department': 'NEUROLOGI',
-      'date': '03 SEP 2026',
-      'score': 88,
-      'status': 'TERVERIFIKASI',
-      'statusColor': AppTheme.stageKesimpulan,
-      'accentColor': AppTheme.stageRencana,
-      'supervisor': 'dr. Hendra Setiawan, Sp.N',
-      'progress': '6/6',
-      'expanded': false,
-    },
-    {
-      'id': '008',
-      'title': 'Manajemen Jalan Napas Pasien Obesitas',
-      'department': 'ANESTESI',
-      'date': '28 AGU 2026',
-      'score': 79,
-      'status': 'DRAFT',
-      'statusColor': AppTheme.textMuted,
-      'accentColor': AppTheme.stageEvaluasi,
-      'supervisor': 'dr. Diana Putri, Sp.An',
-      'progress': '4/6',
-      'expanded': false,
-    },
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -113,27 +51,93 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
       );
     }
 
-    final allItems = [
-      ..._portfolioItems,
-      ..._savedReflections.map((r) => {
-        'id': r.id.length > 3 ? r.id.substring(r.id.length - 3) : r.id,
-        'title': r.title,
-        'department': r.department.toUpperCase(),
-        'date': '${r.createdAt.day} ${_monthName(r.createdAt.month)} ${r.createdAt.year}',
-        'score': 85,
-        'status': 'TERVERIFIKASI',
-        'statusColor': AppTheme.stageKesimpulan,
-        'accentColor': AppTheme.primaryTeal,
-        'supervisor': r.supervisorName.isNotEmpty ? r.supervisorName : 'Prof. Dr. Siti Rahayu, SpPD-KKV',
-        'progress': '6/6',
-        'expanded': false,
-      }),
-    ];
+    final List<Map<String, dynamic>> items = [];
 
-    // Filter items according to tab
-    final displayedItems = allItems.where((item) {
+    if (_savedReflections.isNotEmpty) {
+      for (int i = 0; i < _savedReflections.length; i++) {
+        final r = _savedReflections[i];
+        int filled = 0;
+        if (r.description.trim().isNotEmpty) filled++;
+        if (r.feelings.trim().isNotEmpty) filled++;
+        if (r.evaluation.trim().isNotEmpty) filled++;
+        if (r.analysis.trim().isNotEmpty) filled++;
+        if (r.conclusion.trim().isNotEmpty) filled++;
+        if (r.actionPlan.trim().isNotEmpty) filled++;
+
+        final isVerif = filled >= 5;
+        final status = isVerif ? 'TERVERIFIKASI' : (filled > 2 ? 'MENUNGGU' : 'DRAFT');
+        final statusColor = isVerif
+            ? AppTheme.stageKesimpulan
+            : (filled > 2 ? AppTheme.stageEvaluasi : AppTheme.textMuted);
+
+        final colors = [
+          AppTheme.catKardiologi,
+          AppTheme.primaryTeal,
+          AppTheme.catKomunikasi,
+          AppTheme.catRespirasi,
+        ];
+
+        items.add({
+          'id': '00${i + 1}',
+          'reflectionId': r.id,
+          'title': r.title,
+          'department': r.department.toUpperCase(),
+          'date': '${r.createdAt.day} ${_monthName(r.createdAt.month)} ${r.createdAt.year}',
+          'score': r.completionPercentage,
+          'status': status,
+          'statusColor': statusColor,
+          'accentColor': colors[i % colors.length],
+          'supervisor': r.supervisorName.isNotEmpty ? r.supervisorName : 'dr. DPJP Pembimbing',
+          'progress': '$filled/6',
+          'reflection': r,
+        });
+      }
+    } else {
+      // Data starter jika belum ada refleksi tersimpan
+      items.addAll([
+        {
+          'id': '012',
+          'reflectionId': 'sample-1',
+          'title': 'Penanganan Pasien Hipertensi Krisis',
+          'department': 'KARDIOLOGI',
+          'date': '15 SEP 2026',
+          'score': 82,
+          'status': 'TERVERIFIKASI',
+          'statusColor': AppTheme.stageKesimpulan,
+          'accentColor': AppTheme.catKardiologi,
+          'supervisor': 'Prof. Dr. Siti Rahayu, SpPD-KKV',
+          'progress': '6/6',
+          'reflection': GibbsReflection(
+            id: 'sample-1',
+            createdAt: DateTime.now(),
+            title: 'Penanganan Pasien Hipertensi Krisis',
+            department: 'KARDIOLOGI',
+            supervisorName: 'Prof. Dr. Siti Rahayu, SpPD-KKV',
+            description: 'Menerima pasien laki-laki 58 tahun dengan TD 210/120 mmHg di IGD.',
+            feelings: 'Khawatir terjadi target organ damage namun fokus melakukan stabilisasi.',
+            evaluation: 'Penurunan MAP bertahap berhasil, namun komunikasi ke keluarga terlambat.',
+            analysis: 'Emergensi hipertensi memerlukan penanganan cepat sesuai pedoman JNC/PERKI.',
+            conclusion: 'Kombinasi tim IGD dan pemahaman algoritma sangat krusial.',
+            actionPlan: 'Membaca kembali konsensus PERKI dan berlatih simulasi kasus darurat.',
+          ),
+        },
+      ]);
+    }
+
+    // Hitung counter status
+    int countVerif = 0;
+    int countWait = 0;
+    int countDraft = 0;
+    for (final it in items) {
+      final st = it['status'] as String;
+      if (st == 'TERVERIFIKASI') countVerif++;
+      if (st == 'MENUNGGU') countWait++;
+      if (st == 'DRAFT') countDraft++;
+    }
+
+    final filteredItems = items.where((it) {
       if (_selectedTab == 'SEMUA') return true;
-      return item['status'] == _selectedTab;
+      return it['status'] == _selectedTab;
     }).toList();
 
     return Scaffold(
@@ -144,59 +148,48 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. TOP HEADER (ARSIP REFLEKSI & SINKRON BUTTON)
+              // 1. TOP HEADER (PORTFOLIO & Sync Status)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ARSIP REFLEKSI',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                          color: AppTheme.textMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'E-Portfolio',
-                        style: GoogleFonts.newsreader(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textInk,
-                          height: 1.1,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'E-PORTOFOLIO KLINIS',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                      color: AppTheme.textMuted,
+                    ),
                   ),
                   InkWell(
                     onTap: () {
+                      _loadData();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Menyinkronkan data dengan e-Portofolio Kampus... Selesai!')),
+                        const SnackBar(
+                          backgroundColor: AppTheme.primaryTeal,
+                          content: Text('Portofolio berhasil disinkronkan dengan basis data lokal!'),
+                        ),
                       );
                     },
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: AppTheme.surfaceWarm,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: AppTheme.lightBorder),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.sync, size: 14, color: AppTheme.textInk),
-                          const SizedBox(width: 6),
+                          const Icon(Icons.sync, size: 14, color: AppTheme.primaryTeal),
+                          const SizedBox(width: 5),
                           Text(
-                            'SINKRON',
+                            'SINKRONKAN',
                             style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
+                              letterSpacing: 0.8,
                               color: AppTheme.textInk,
                             ),
                           ),
@@ -208,7 +201,7 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                '12 LAPORAN TERSIMPAN',
+                '${items.length} LAPORAN TERSIMPAN',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -218,7 +211,7 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 2. STATUS COUNTERS (03 TERVERIFIKASI | 01 MENUNGGU | 01 DRAFT)
+              // 2. STATUS COUNTERS
               Container(
                 decoration: const BoxDecoration(
                   border: Border(
@@ -229,11 +222,23 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 child: Row(
                   children: [
-                    _buildStatCol('03', 'TERVERIFIKASI', AppTheme.stageKesimpulan),
+                    _buildStatCol(
+                      countVerif < 10 ? '0$countVerif' : '$countVerif',
+                      'TERVERIFIKASI',
+                      AppTheme.stageKesimpulan,
+                    ),
                     Container(width: 1, height: 38, color: const Color(0xFFE5DDD1)),
-                    _buildStatCol('01', 'MENUNGGU', AppTheme.stageEvaluasi),
+                    _buildStatCol(
+                      countWait < 10 ? '0$countWait' : '$countWait',
+                      'MENUNGGU',
+                      AppTheme.stageEvaluasi,
+                    ),
                     Container(width: 1, height: 38, color: const Color(0xFFE5DDD1)),
-                    _buildStatCol('01', 'DRAFT', AppTheme.textMuted),
+                    _buildStatCol(
+                      countDraft < 10 ? '0$countDraft' : '$countDraft',
+                      'DRAFT',
+                      AppTheme.textMuted,
+                    ),
                   ],
                 ),
               ),
@@ -276,8 +281,11 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
 
               // 4. LIST ITEMS
               Column(
-                children: displayedItems.map((item) {
-                  final isExpanded = item['expanded'] == true;
+                children: filteredItems.map((item) {
+                  final refId = item['reflectionId'] as String;
+                  final isExpanded = _expandedIds.contains(refId);
+                  final ref = item['reflection'] as GibbsReflection;
+
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
@@ -289,98 +297,109 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Row: Index, Title, Score, Status
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item['id'] as String,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textLight,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Vertical accent bar
-                            Container(
-                              width: 3.5,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: item['accentColor'] as Color,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item['title'] as String,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.textInk,
-                                      height: 1.25,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${item['department']} · ${item['date']}',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.8,
-                                      color: AppTheme.textLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '${item['score']}',
-                                  style: GoogleFonts.newsreader(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w600,
-                                    color: item['accentColor'] as Color,
-                                    height: 1.0,
-                                  ),
+                        // Row: Header
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              if (isExpanded) {
+                                _expandedIds.remove(refId);
+                              } else {
+                                _expandedIds.add(refId);
+                              }
+                            });
+                          },
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['id'] as String,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textLight,
                                 ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
+                              ),
+                              const SizedBox(width: 12),
+                              // Vertical accent bar
+                              Container(
+                                width: 3.5,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: item['accentColor'] as Color,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: BoxDecoration(
-                                        color: item['statusColor'] as Color,
-                                        shape: BoxShape.circle,
+                                    Text(
+                                      item['title'] as String,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.textInk,
+                                        height: 1.25,
                                       ),
                                     ),
-                                    const SizedBox(width: 4),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      item['status'] as String,
+                                      '${item['department']} · ${item['date']}',
                                       style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.6,
-                                        color: item['statusColor'] as Color,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.8,
+                                        color: AppTheme.textLight,
                                       ),
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ],
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${item['score']}',
+                                    style: GoogleFonts.newsreader(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w600,
+                                      color: item['accentColor'] as Color,
+                                      height: 1.0,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: item['statusColor'] as Color,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        item['status'] as String,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.6,
+                                          color: item['statusColor'] as Color,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
 
-                        // If expanded, show progress bars, supervisor card, and action buttons
+                        // Jika Expanded: Tampilkan 6 Fase Gibbs, Pembimbing, dan Tombol Tindakan
                         if (isExpanded) ...[
                           const SizedBox(height: 14),
                           Row(
@@ -449,9 +468,9 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'SUPERVISOR',
+                                      'SUPERVISOR / DPJP',
                                       style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 9.5,
+                                        fontSize: 9,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.0,
                                         color: AppTheme.textLight,
@@ -461,8 +480,8 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                                     Text(
                                       item['supervisor'] as String,
                                       style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
                                         color: AppTheme.textInk,
                                       ),
                                     ),
@@ -473,7 +492,7 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // Action Buttons Row (LIHAT | EKSPOR PDF | SUNTING)
+                          // Action Buttons
                           Row(
                             children: [
                               Expanded(
@@ -487,32 +506,19 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
                                     onPressed: () {
-                                      final dummy = GibbsReflection(
-                                        id: item['id'] as String,
-                                        createdAt: DateTime.now(),
-                                        title: item['title'] as String,
-                                        department: item['department'] as String,
-                                        supervisorName: item['supervisor'] as String,
-                                        description: 'Pasien datang dengan tensi 190/110 mmHg di IGD.',
-                                        feelings: 'Sempat merasa cemas namun berusaha tetap tenang sesuai protokol.',
-                                        evaluation: 'Respon cepat pemberian antihipertensi parenteral berhasil menurunkan MAP secara aman.',
-                                        analysis: 'Pentingnya monitoring ketat organ target pada krisis hipertensi.',
-                                        conclusion: 'Kombinasi tim IGD dan pemahaman algoritma sangat krusial.',
-                                        actionPlan: 'Akan membaca kembali konsensus PERKI tentang emergensi hipertensi.',
-                                      );
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) => GibbsReportScreen(reflection: dummy),
+                                          builder: (_) => GibbsReportScreen(reflection: ref),
                                         ),
                                       );
                                     },
                                     child: Text(
-                                      'LIHAT',
+                                      'LIHAT LAPORAN',
                                       style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 11.5,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.8,
+                                        letterSpacing: 0.6,
                                       ),
                                     ),
                                   ),
@@ -529,17 +535,10 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
                                     onPressed: () {
-                                      final dummy = GibbsReflection(
-                                        id: item['id'] as String,
-                                        createdAt: DateTime.now(),
-                                        title: item['title'] as String,
-                                        department: item['department'] as String,
-                                        supervisorName: item['supervisor'] as String,
-                                      );
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) => PdfExportScreen(reflection: dummy),
+                                          builder: (_) => PdfExportScreen(reflection: ref),
                                         ),
                                       );
                                     },
@@ -556,30 +555,58 @@ class _EPortfolioSyncScreenState extends State<EPortfolioSyncScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Expanded(
-                                child: SizedBox(
-                                  height: 38,
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      backgroundColor: AppTheme.surfaceWarm,
-                                      side: const BorderSide(color: AppTheme.lightBorder),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Membuka mode sunting untuk ${item['title']}...')),
-                                      );
-                                    },
-                                    child: Text(
-                                      'SUNTING',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.6,
-                                        color: AppTheme.textInk,
-                                      ),
-                                    ),
+                              SizedBox(
+                                height: 38,
+                                width: 42,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    backgroundColor: AppTheme.surfaceWarm,
+                                    side: const BorderSide(color: AppTheme.lightBorder),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
+                                  onPressed: () {
+                                    final textToCopy = '''
+LAPORAN REFLEKSI KLINIS GIBBS
+Judul: ${ref.title}
+Stase: ${ref.department} | Mahasiswa: ${ref.studentName} (${ref.studentId})
+DPJP: ${ref.supervisorName}
+Tanggal: ${ref.createdAt.day}/${ref.createdAt.month}/${ref.createdAt.year}
+
+1. DESKRIPSI:
+${ref.description}
+
+2. PERASAAN:
+${ref.feelings}
+
+3. EVALUASI:
+${ref.evaluation}
+
+4. ANALISIS:
+${ref.analysis}
+
+5. KESIMPULAN:
+${ref.conclusion}
+
+6. RENCANA AKSI (SMART PLAN):
+${ref.actionPlan}
+Specific: ${ref.smartAction.specific}
+Measurable: ${ref.smartAction.measurable}
+Time-Bound: ${ref.smartAction.timeBound}
+
+Tingkat Kedalaman: ${ref.depthLabel}
+Key Takeaway: ${ref.keyTakeaway}
+''';
+                                    Clipboard.setData(ClipboardData(text: textToCopy));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        backgroundColor: AppTheme.primaryTeal,
+                                        behavior: SnackBarBehavior.floating,
+                                        content: Text('Teks refleksi Gibbs berhasil disalin untuk di-upload ke LMS Kampus!'),
+                                      ),
+                                    );
+                                  },
+                                  child: const Icon(Icons.copy_rounded, size: 17, color: AppTheme.textInk),
                                 ),
                               ),
                             ],

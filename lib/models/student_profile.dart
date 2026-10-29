@@ -17,7 +17,7 @@ class StudentProfile {
     this.teachingHospital = 'RSUP Pendidikan Utama',
     this.supervisorName = 'dr. Sp.PD, Subsp. (K)',
     this.geminiApiKey = 'tk-gw-46b82e15f253e09d47829bd9712d2d3df6104ea2b57af30e88e80aa076a9f7c7',
-    this.geminiModelName = 'deepseek-chat',
+    this.geminiModelName = 'glm-5.3-flash',
     this.apiBaseUrl = 'https://tokengateway.ai.id/v1',
   });
 
@@ -40,9 +40,13 @@ class StudentProfile {
         : 'tk-gw-46b82e15f253e09d47829bd9712d2d3df6104ea2b57af30e88e80aa076a9f7c7';
 
     final savedModel = json['geminiModelName'] as String?;
-    final model = (savedModel != null && savedModel.trim().isNotEmpty)
-        ? (savedModel.contains('gemini') && key.startsWith('tk-gw-') ? 'deepseek-chat' : savedModel.trim())
-        : (key.startsWith('tk-gw-') ? 'deepseek-chat' : 'gemini-1.5-flash');
+    final model = (savedModel != null &&
+            savedModel.trim().isNotEmpty &&
+            !savedModel.contains('deepseek') &&
+            !savedModel.contains('pass-glm') &&
+            !savedModel.contains('gemini'))
+        ? savedModel.trim()
+        : 'glm-5.3-flash';
 
     final savedUrl = json['apiBaseUrl'] as String?;
     final url = (savedUrl != null && savedUrl.trim().isNotEmpty)

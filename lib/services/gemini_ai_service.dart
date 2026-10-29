@@ -7,14 +7,19 @@ import 'ai_training_service.dart';
 
 class GeminiAiService {
   String? _apiKey;
-  String _modelName = 'deepseek-chat';
+  String _modelName = 'glm-5.3-flash';
   String _apiBaseUrl = 'https://tokengateway.ai.id/v1';
   GenerativeModel? _geminiModel;
 
   void updateApiKey(String? key, {String? modelName, String? baseUrl}) {
     _apiKey = key;
     if (modelName != null && modelName.trim().isNotEmpty) {
-      _modelName = modelName.trim();
+      final m = modelName.trim();
+      if (m.contains('pass-glm') || m.contains('deepseek')) {
+        _modelName = 'glm-5.3-flash';
+      } else {
+        _modelName = m;
+      }
     }
     if (baseUrl != null && baseUrl.trim().isNotEmpty) {
       _apiBaseUrl = baseUrl.trim();
@@ -135,12 +140,20 @@ class GeminiAiService {
     client.connectionTimeout = const Duration(seconds: 30);
 
     try {
+      String effectiveModel = _modelName.trim();
+      if (effectiveModel.isEmpty ||
+          effectiveModel.contains('deepseek') ||
+          effectiveModel.contains('pass-glm')) {
+        effectiveModel = 'glm-5.3-flash';
+      }
+
       final request = await client.postUrl(url);
       request.headers.set('Content-Type', 'application/json; charset=utf-8');
       request.headers.set('Authorization', 'Bearer ${_apiKey!.trim()}');
+      request.headers.set('User-Agent', 'ReflectMedApp/1.0 (Mobile; Android)');
 
       final payload = jsonEncode({
-        'model': _modelName.trim().isNotEmpty ? _modelName.trim() : 'deepseek-chat',
+        'model': effectiveModel,
         'messages': messages,
         'temperature': 0.7,
       });
@@ -162,6 +175,27 @@ class GeminiAiService {
         }
       }
 
+      if (response.statusCode == 404 && responseBody.contains('model_not_found')) {
+        // Otomatis tanyakan ke TokenGateway daftar model yang diizinkan untuk API Key ini
+        final availableModels = await _fetchAvailableTokenGatewayModels(client);
+        if (availableModels.isNotEmpty) {
+          final match = availableModels.firstWhere(
+            (m) =>
+                m.toLowerCase().contains('glm') ||
+                m.toLowerCase().contains('flash') ||
+                m.toLowerCase().contains('deepseek'),
+            orElse: () => availableModels.first,
+          );
+          if (match != _modelName) {
+            debugPrint('[ReflectMed Auto-Fix]: Beralih dari $_modelName ke model resmi TokenGateway: $match');
+            _modelName = match;
+            // Coba kirim ulang dengan ID model yang benar dari server
+            return await _sendTokenGatewayMessage(userText, history);
+          }
+          throw Exception('Model "$_modelName" tidak ditemukan. Model aktif di akun Anda: ${availableModels.join(", ")}');
+        }
+      }
+
       throw Exception('TokenGateway [HTTP ${response.statusCode}]: $responseBody');
     } catch (e) {
       lastError = e.toString();
@@ -170,6 +204,30 @@ class GeminiAiService {
     } finally {
       client.close();
     }
+  }
+
+  /// Mengambil daftar model yang diizinkan untuk API Key ini dari TokenGateway
+  Future<List<String>> _fetchAvailableTokenGatewayModels(HttpClient client) async {
+    try {
+      final endpoint = _apiBaseUrl.endsWith('/') ? '${_apiBaseUrl}models' : '$_apiBaseUrl/models';
+      final req = await client.getUrl(Uri.parse(endpoint));
+      req.headers.set('Authorization', 'Bearer ${_apiKey!.trim()}');
+      req.headers.set('User-Agent', 'ReflectMedApp/1.0 (Mobile; Android)');
+      final res = await req.close();
+      final body = await res.transform(utf8.decoder).join();
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final json = jsonDecode(body) as Map<String, dynamic>;
+        final data = json['data'] as List<dynamic>?;
+        if (data != null) {
+          return data
+              .map((item) => (item as Map<String, dynamic>)['id'] as String)
+              .toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('[ReflectMed] Error fetching models from TokenGateway: $e');
+    }
+    return [];
   }
 
   /// Engine pedagogis bawaan berbasis aturan AMEE Guide 44 & Siklus Gibbs

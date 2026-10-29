@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
+import '../models/gibbs_reflection.dart';
+import '../models/student_profile.dart';
+import '../services/storage_service.dart';
 
 class ProgressAnalyticsScreen extends StatefulWidget {
   const ProgressAnalyticsScreen({Key? key}) : super(key: key);
@@ -11,33 +14,134 @@ class ProgressAnalyticsScreen extends StatefulWidget {
 
 class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
   String _selectedPeriod = 'BULAN';
+  List<GibbsReflection> _reflections = [];
+  StudentProfile _profile = StudentProfile();
+  bool _isLoading = true;
 
-  final List<Map<String, dynamic>> _competencies = [
-    {'name': 'Komunikasi Pasien', 'score': 88, 'color': AppTheme.stageDeskripsi},
-    {'name': 'Pengambilan Keputusan', 'score': 75, 'color': AppTheme.stagePerasaan},
-    {'name': 'Manajemen Risiko', 'score': 82, 'color': AppTheme.stageKesimpulan},
-    {'name': 'Kerja Tim', 'score': 91, 'color': AppTheme.stageEvaluasi},
-    {'name': 'Praktik Berbasis Bukti', 'score': 68, 'color': AppTheme.stageAnalisis},
-    {'name': 'Refleksi Diri', 'score': 85, 'color': AppTheme.stageRencana},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
 
-  final List<Map<String, dynamic>> _categories = [
-    {'count': 5, 'name': 'KARDIOLOGI', 'color': AppTheme.catKardiologi},
-    {'count': 4, 'name': 'RESPIRASI', 'color': AppTheme.catRespirasi},
-    {'count': 3, 'name': 'ENDOKRIN', 'color': AppTheme.catEndokrin},
-    {'count': 2, 'name': 'NEURO', 'color': AppTheme.catNeuro},
-    {'count': 3, 'name': 'LAIN', 'color': AppTheme.catLain},
-  ];
-
-  final List<Map<String, dynamic>> _badges = [
-    {'title': '7 HARI\nBERUNTUN', 'icon': Icons.military_tech_outlined, 'unlocked': true},
-    {'title': '10\nREFLEKSI', 'icon': Icons.military_tech_outlined, 'unlocked': true},
-    {'title': 'SKOR 90+', 'icon': Icons.military_tech_outlined, 'unlocked': true},
-    {'title': '50\nREFLEKSI', 'icon': Icons.military_tech_outlined, 'unlocked': false},
-  ];
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final list = await StorageService.loadReflections();
+    final profile = await StorageService.loadProfile();
+    if (mounted) {
+      setState(() {
+        _reflections = list;
+        _profile = profile;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.parchmentBg,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primaryTeal)),
+      );
+    }
+
+    // 1. Metrik Dasar
+    final totalReflections = _reflections.length;
+    int avgScore = 84;
+    int completeCycles = 0;
+    if (_reflections.isNotEmpty) {
+      int sumScore = 0;
+      for (final r in _reflections) {
+        sumScore += r.completionPercentage;
+        if (r.isComplete) completeCycles++;
+      }
+      avgScore = (sumScore / _reflections.length).round();
+    }
+
+    final activeDaysCount = _reflections.isNotEmpty
+        ? _reflections.map((r) => '${r.createdAt.year}-${r.createdAt.month}-${r.createdAt.day}').toSet().length
+        : 7;
+
+    // 2. Kompetensi Berdasarkan 6 Fase Gibbs
+    int descScore = 95, feelScore = 88, evalScore = 72, anaScore = 65, concScore = 80, planScore = 58;
+    if (_reflections.isNotEmpty) {
+      int descCount = 0, feelCount = 0, evalCount = 0, anaCount = 0, concCount = 0, planCount = 0;
+      for (final r in _reflections) {
+        if (r.description.trim().isNotEmpty) descCount++;
+        if (r.feelings.trim().isNotEmpty) feelCount++;
+        if (r.evaluation.trim().isNotEmpty) evalCount++;
+        if (r.analysis.trim().isNotEmpty) anaCount++;
+        if (r.conclusion.trim().isNotEmpty) concCount++;
+        if (r.actionPlan.trim().isNotEmpty) planCount++;
+      }
+      final t = _reflections.length;
+      descScore = ((descCount / t) * 100).round();
+      feelScore = ((feelCount / t) * 100).round();
+      evalScore = ((evalCount / t) * 100).round();
+      anaScore = ((anaCount / t) * 100).round();
+      concScore = ((concCount / t) * 100).round();
+      planScore = ((planCount / t) * 100).round();
+    }
+
+    final competencies = [
+      {'name': 'Deskripsi Objektif Kasus', 'score': descScore, 'color': AppTheme.stageDeskripsi},
+      {'name': 'Kesadaran Respons Emosi', 'score': feelScore, 'color': AppTheme.stagePerasaan},
+      {'name': 'Evaluasi Hasil Tindakan', 'score': evalScore, 'color': AppTheme.stageEvaluasi},
+      {'name': 'Analisis Kritis Berbasis Teori (EBM)', 'score': anaScore, 'color': AppTheme.stageAnalisis},
+      {'name': 'Kesimpulan & Model Mental', 'score': concScore, 'color': AppTheme.stageKesimpulan},
+      {'name': 'Rencana Tindakan Terukur (SMART)', 'score': planScore, 'color': AppTheme.stageRencana},
+    ];
+
+    // 3. Kategori Stase Klinis
+    final Map<String, int> deptMap = {};
+    for (final r in _reflections) {
+      final dept = r.department.trim().isNotEmpty ? r.department.trim().toUpperCase() : 'UMUM';
+      deptMap[dept] = (deptMap[dept] ?? 0) + 1;
+    }
+
+    final List<Map<String, dynamic>> categoryList = [];
+    final catColors = [
+      AppTheme.catKardiologi,
+      AppTheme.catRespirasi,
+      AppTheme.catEndokrin,
+      AppTheme.catNeuro,
+      AppTheme.catLain,
+    ];
+
+    if (deptMap.isNotEmpty) {
+      int idx = 0;
+      deptMap.forEach((name, count) {
+        categoryList.add({
+          'count': count,
+          'name': name.length > 10 ? '${name.substring(0, 8)}..' : name,
+          'color': catColors[idx % catColors.length],
+        });
+        idx++;
+      });
+    } else {
+      categoryList.addAll([
+        {'count': 5, 'name': 'KARDIOLOGI', 'color': AppTheme.catKardiologi},
+        {'count': 4, 'name': 'RESPIRASI', 'color': AppTheme.catRespirasi},
+        {'count': 3, 'name': 'INTERNA', 'color': AppTheme.catEndokrin},
+        {'count': 2, 'name': 'NEURO', 'color': AppTheme.catNeuro},
+        {'count': 1, 'name': 'LAINNYA', 'color': AppTheme.catLain},
+      ]);
+    }
+
+    // 4. Lencana Pencapaian Dinamis
+    final hasTransformative = _reflections.any((r) => r.depthLevel == ReflectionDepth.transformative);
+    final hasHighCompleteness = _reflections.any((r) => r.completionPercentage >= 90);
+    final hasMultiple = _reflections.length >= 5;
+    final hasStarter = _reflections.isNotEmpty;
+
+    final badges = [
+      {'title': 'REFLEKSI\nPERTAMA', 'icon': Icons.stars_rounded, 'unlocked': hasStarter},
+      {'title': '5 REFLEKSI\nTERCATAT', 'icon': Icons.military_tech_outlined, 'unlocked': hasMultiple},
+      {'title': 'SKOR 90+\nLENGKAP', 'icon': Icons.verified_outlined, 'unlocked': hasHighCompleteness},
+      {'title': 'TRANSFORMASI\nPARADIGMA', 'icon': Icons.psychology_outlined, 'unlocked': hasTransformative},
+    ];
+
     return Scaffold(
       backgroundColor: AppTheme.parchmentBg,
       body: SafeArea(
@@ -68,7 +172,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 2. METRIC STRIP (47 TOTAL REFLEKSI | 84 RATA SKOR | 23 HARI AKTIF)
+              // 2. METRIC STRIP (TOTAL REFLEKSI | RATA SKOR | HARI AKTIF)
               Container(
                 decoration: const BoxDecoration(
                   border: Border(
@@ -79,11 +183,21 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 child: Row(
                   children: [
-                    _buildMetricCol('47', 'TOTAL REFLEKSI', '+12 BLN INI', null),
+                    _buildMetricCol(
+                      totalReflections < 10 ? '0$totalReflections' : '$totalReflections',
+                      'TOTAL REFLEKSI',
+                      totalReflections > 0 ? 'Tersimpan' : 'Mulai Baru',
+                      null,
+                    ),
                     Container(width: 1, height: 46, color: const Color(0xFFE5DDD1)),
-                    _buildMetricCol('84', 'RATA SKOR', '↑ 6 POIN', null),
+                    _buildMetricCol('$avgScore%', 'RATA SKOR', 'Kelengkapan', null),
                     Container(width: 1, height: 46, color: const Color(0xFFE5DDD1)),
-                    _buildMetricCol('23', 'HARI AKTIF', 'BLN INI', null),
+                    _buildMetricCol(
+                      activeDaysCount < 10 ? '0$activeDaysCount' : '$activeDaysCount',
+                      'HARI AKTIF',
+                      'Refleksi Diri',
+                      null,
+                    ),
                   ],
                 ),
               ),
@@ -202,9 +316,9 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               ),
               const SizedBox(height: 28),
 
-              // 6. KOMPETENSI KLINIS (6 Progress Bars)
+              // 6. KOMPETENSI KLINIS (6 Progress Bars dari Fase Gibbs)
               Text(
-                'KOMPETENSI KLINIS',
+                'PENGUASAAN SIKLUS REFLEKSI GIBBS',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -214,7 +328,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               ),
               const SizedBox(height: 12),
               Column(
-                children: _competencies.map((comp) {
+                children: competencies.map((comp) {
                   final score = comp['score'] as int;
                   final color = comp['color'] as Color;
                   return Padding(
@@ -225,7 +339,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
                           child: Text(
                             comp['name'] as String,
                             style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
+                              fontSize: 12.5,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.textInk,
                             ),
@@ -236,7 +350,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
-                              value: score / 100,
+                              value: (score / 100).clamp(0.0, 1.0),
                               backgroundColor: const Color(0xFFE8DFD3),
                               valueColor: AlwaysStoppedAnimation<Color>(color),
                               minHeight: 7,
@@ -245,12 +359,12 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
                         ),
                         const SizedBox(width: 14),
                         SizedBox(
-                          width: 24,
+                          width: 32,
                           child: Text(
-                            '$score',
+                            '$score%',
                             textAlign: TextAlign.end,
                             style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: color,
                             ),
@@ -263,9 +377,9 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               ),
               const SizedBox(height: 28),
 
-              // 7. KATEGORI KASUS TERBANYAK (Blocks with numbers above)
+              // 7. KATEGORI STASE / KASUS
               Text(
-                'KATEGORI KASUS TERBANYAK',
+                'DISTRIBUSI KASUS STASE ROTASI',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -276,7 +390,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: _categories.map((cat) {
+                children: categoryList.take(5).map((cat) {
                   final count = cat['count'] as int;
                   final color = cat['color'] as Color;
                   return Expanded(
@@ -310,6 +424,8 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
                               letterSpacing: 0.5,
                               color: AppTheme.textLight,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -321,7 +437,7 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
 
               // 8. LENCANA PENCAPAIAN
               Text(
-                'LENCANA PENCAPAIAN',
+                'LENCANA PENCAPAIAN & KEMATANGAN',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -333,13 +449,13 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: _badges.map((badge) {
+                  children: badges.map((badge) {
                     final unlocked = badge['unlocked'] as bool;
                     final borderColor = unlocked ? AppTheme.primaryTeal : const Color(0xFFD5CDC0);
                     final textColor = unlocked ? AppTheme.textInk : AppTheme.textLight;
 
                     return Container(
-                      width: 92,
+                      width: 96,
                       height: 104,
                       margin: const EdgeInsets.only(right: 10),
                       padding: const EdgeInsets.all(10),
@@ -448,75 +564,54 @@ class _ProgressAnalyticsScreenState extends State<ProgressAnalyticsScreen> {
 class _SmoothTrendChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // 12 data points corresponding to O N D J F M A M J J A S
-    final points = [
-      Offset(size.width * 0.04, size.height * 0.82),
-      Offset(size.width * 0.12, size.height * 0.72),
-      Offset(size.width * 0.20, size.height * 0.60),
-      Offset(size.width * 0.28, size.height * 0.76),
-      Offset(size.width * 0.38, size.height * 0.52),
-      Offset(size.width * 0.46, size.height * 0.45),
-      Offset(size.width * 0.54, size.height * 0.55),
-      Offset(size.width * 0.63, size.height * 0.35),
-      Offset(size.width * 0.72, size.height * 0.30),
-      Offset(size.width * 0.80, size.height * 0.26),
-      Offset(size.width * 0.89, size.height * 0.36),
-      Offset(size.width * 0.96, size.height * 0.12),
-    ];
+    final paint = Paint()
+      ..color = AppTheme.primaryTeal
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          AppTheme.primaryTeal.withOpacity(0.18),
+          AppTheme.primaryTeal.withOpacity(0.0),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
     final path = Path();
     final fillPath = Path();
 
-    path.moveTo(points.first.dx, points.first.dy);
-    fillPath.moveTo(points.first.dx, size.height);
-    fillPath.lineTo(points.first.dx, points.first.dy);
+    final points = [
+      Offset(0, size.height * 0.75),
+      Offset(size.width * 0.15, size.height * 0.65),
+      Offset(size.width * 0.3, size.height * 0.55),
+      Offset(size.width * 0.45, size.height * 0.60),
+      Offset(size.width * 0.6, size.height * 0.40),
+      Offset(size.width * 0.75, size.height * 0.35),
+      Offset(size.width * 0.9, size.height * 0.20),
+      Offset(size.width, size.height * 0.15),
+    ];
+
+    path.moveTo(points[0].dx, points[0].dy);
+    fillPath.moveTo(points[0].dx, size.height);
+    fillPath.lineTo(points[0].dx, points[0].dy);
 
     for (int i = 0; i < points.length - 1; i++) {
       final p0 = points[i];
       final p1 = points[i + 1];
-      final controlX = (p0.dx + p1.dx) / 2;
-      path.cubicTo(controlX, p0.dy, controlX, p1.dy, p1.dx, p1.dy);
-      fillPath.cubicTo(controlX, p0.dy, controlX, p1.dy, p1.dx, p1.dy);
+      final cp1 = Offset(p0.dx + (p1.dx - p0.dx) / 2, p0.dy);
+      final cp2 = Offset(p0.dx + (p1.dx - p0.dx) / 2, p1.dy);
+      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p1.dx, p1.dy);
+      fillPath.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p1.dx, p1.dy);
     }
 
-    fillPath.lineTo(points.last.dx, size.height);
+    fillPath.lineTo(size.width, size.height);
     fillPath.close();
 
-    // Fill paint with soft gradient
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          AppTheme.primaryTeal.withValues(alpha: 0.18),
-          AppTheme.primaryTeal.withValues(alpha: 0.0),
-        ],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
     canvas.drawPath(fillPath, fillPaint);
-
-    // Line stroke paint
-    final linePaint = Paint()
-      ..color = AppTheme.primaryTeal
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    canvas.drawPath(path, linePaint);
-
-    // Draw circular dots
-    final dotPaint = Paint()
-      ..color = AppTheme.surfaceWarm
-      ..style = PaintingStyle.fill;
-
-    final dotBorderPaint = Paint()
-      ..color = AppTheme.primaryTeal
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-
-    for (final pt in points) {
-      canvas.drawCircle(pt, 3.5, dotPaint);
-      canvas.drawCircle(pt, 3.5, dotBorderPaint);
-    }
+    canvas.drawPath(path, paint);
   }
 
   @override

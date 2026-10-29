@@ -78,7 +78,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               TextField(
                 controller: keyCtrl,
                 decoration: const InputDecoration(
-                  labelText: 'API Key (TokenGateway / DeepSeek / Gemini)',
+                  labelText: 'API Key (TokenGateway / Gemini)',
                   hintText: 'tk-gw-... atau AIzaSy...',
                   helperText: 'TokenGateway: tk-gw-... | Gemini: AIzaSy...',
                 ),
@@ -88,15 +88,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 decoration: const InputDecoration(
                   labelText: 'API Base URL Gateway',
                   hintText: 'https://tokengateway.ai.id/v1',
-                  helperText: 'Endpoint untuk model DeepSeek / OpenAI gateway',
+                  helperText: 'Endpoint gateway OpenAI / TokenGateway',
                 ),
               ),
               TextField(
                 controller: modelCtrl,
                 decoration: const InputDecoration(
                   labelText: 'ID Model AI',
-                  hintText: 'deepseek-chat atau gemini-1.5-flash',
-                  helperText: 'Model aktif di TokenGateway (misal: deepseek-chat)',
+                  hintText: 'glm-5.3-flash atau gemini-1.5-flash',
+                  helperText: 'Model aktif di TokenGateway (misal: glm-5.3-flash)',
                 ),
               ),
             ],
@@ -115,7 +115,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             onPressed: () async {
               final rawKey = keyCtrl.text.trim();
               final rawUrl = urlCtrl.text.trim();
-              final rawModel = modelCtrl.text.trim();
+              String rawModel = modelCtrl.text.trim();
+              if (rawModel.isEmpty || rawModel.contains('deepseek') || rawModel.contains('pass-glm')) {
+                rawModel = 'glm-5.3-flash';
+              }
 
               _profile.fullName = nameCtrl.text.trim();
               _profile.studentId = nimCtrl.text.trim();
@@ -123,7 +126,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               _profile.teachingHospital = hospCtrl.text.trim();
               _profile.supervisorName = supCtrl.text.trim();
               _profile.geminiApiKey = rawKey;
-              _profile.geminiModelName = rawModel.isNotEmpty ? rawModel : 'deepseek-chat';
+              _profile.geminiModelName = rawModel;
               _profile.apiBaseUrl = rawUrl.isNotEmpty ? rawUrl : 'https://tokengateway.ai.id/v1';
 
               await StorageService.saveProfile(_profile);
@@ -136,7 +139,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     behavior: SnackBarBehavior.floating,
                     content: Text(
                       rawKey.startsWith('tk-gw-')
-                          ? 'TokenGateway DeepSeek berhasil terhubung!'
+                          ? 'TokenGateway GLM 5.3 Flash berhasil terhubung!'
                           : 'Pengaturan profil dan AI berhasil disimpan!',
                       style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
                     ),
@@ -343,7 +346,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                                 : 'Google Cloud · ${_profile.geminiModelName}'),
                         statusTag: _profile.geminiApiKey.isEmpty
                             ? 'Offline'
-                            : (_profile.geminiApiKey.startsWith('tk-gw-') ? 'DeepSeek' : 'Gemini'),
+                            : (_profile.geminiApiKey.startsWith('tk-gw-') ? 'TokenGateway' : 'Gemini'),
                         onTap: _openEditDialog,
                       ),
                       _buildMenuItem(Icons.verified_user_outlined, 'Autentikasi SSO Kampus', 'Terhubung: FKUI SSO ID', statusTag: 'Aktif'),

@@ -9,6 +9,8 @@ import '../services/gemini_ai_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/talking_mentor_avatar.dart';
 import '../widgets/quick_scenario_chips.dart';
+import '../services/gibbs_extractor_service.dart';
+import 'gibbs_report_screen.dart';
 import 'profile_settings_screen.dart';
 
 class ReflectiveChatScreen extends StatefulWidget {
@@ -174,6 +176,107 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     }
   }
 
+  Future<void> _generateGibbsReport() async {
+    final userMessages = _messages.where((m) => m.isUser).toList();
+    if (userMessages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.primaryTeal,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Belum ada percakapan refleksi. Ceritakan pengalaman klinis Anda terlebih dahulu.',
+            style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: AppTheme.surfaceWarm,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primaryTeal,
+                    strokeWidth: 3.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Menyusun Laporan Refleksi Gibbs',
+                  style: GoogleFonts.newsreader(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textInk,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'AI Mentor sedang membedah dialog klinis Anda ke dalam 6 fase Gibbs, mengevaluasi kedalaman refleksi, dan merumuskan SMART Plan...',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: AppTheme.textMuted,
+                    height: 1.45,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final extractor = GibbsExtractorService(
+        apiKey: _profile.geminiApiKey,
+        baseUrl: _profile.apiBaseUrl,
+        modelName: _profile.geminiModelName,
+      );
+
+      final reflection = await extractor.extractReflection(
+        messages: _messages,
+        profile: _profile,
+      );
+
+      await StorageService.saveReflection(reflection);
+
+      if (mounted) {
+        Navigator.pop(context); // Tutup dialog loading
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GibbsReportScreen(reflection: reflection),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Tutup dialog loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF991B1B),
+            content: Text('Gagal menyusun laporan refleksi: $e'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _sendMessage([String? presetText]) async {
     final text = presetText ?? _textController.text.trim();
     if (text.isEmpty) return;
@@ -303,18 +406,42 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                     ),
                   ),
 
-                  // Actions: Toggle Scenario Chips, Reset Chat & Settings Gear
+                  // Actions: Buat Laporan (AI), Toggle Scenario Chips, Reset Chat & Settings Gear
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Tombol Ekstrak ke Laporan Gibbs (AI)
+                      InkWell(
+                        onTap: _generateGibbsReport,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 35,
+                          height: 35,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryTeal,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryTeal.withValues(alpha: 0.25),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.auto_awesome, color: AppTheme.accentAmber, size: 17),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
                       InkWell(
                         onTap: () => setState(() => _showQuickChips = !_showQuickChips),
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
-                          width: 38,
-                          height: 38,
+                          width: 35,
+                          height: 35,
                           decoration: BoxDecoration(
-                            color: _showQuickChips ? AppTheme.primaryTeal.withOpacity(0.12) : AppTheme.surfaceWarm,
+                            color: _showQuickChips ? AppTheme.primaryTeal.withValues(alpha: 0.12) : AppTheme.surfaceWarm,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: _showQuickChips ? AppTheme.primaryTeal : AppTheme.lightBorder,
@@ -323,17 +450,17 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                           child: Icon(
                             Icons.auto_stories_outlined,
                             color: _showQuickChips ? AppTheme.primaryTeal : AppTheme.textMuted,
-                            size: 19,
+                            size: 18,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       InkWell(
                         onTap: _resetChat,
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
-                          width: 38,
-                          height: 38,
+                          width: 35,
+                          height: 35,
                           decoration: BoxDecoration(
                             color: AppTheme.surfaceWarm,
                             borderRadius: BorderRadius.circular(10),
@@ -342,17 +469,17 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                           child: const Icon(
                             Icons.restart_alt,
                             color: AppTheme.textMuted,
-                            size: 20,
+                            size: 19,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       InkWell(
                         onTap: _openSettings,
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
-                          width: 38,
-                          height: 38,
+                          width: 35,
+                          height: 35,
                           decoration: BoxDecoration(
                             color: AppTheme.surfaceWarm,
                             borderRadius: BorderRadius.circular(10),
@@ -361,7 +488,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                           child: const Icon(
                             Icons.settings_outlined,
                             color: AppTheme.textMuted,
-                            size: 20,
+                            size: 19,
                           ),
                         ),
                       ),
@@ -430,7 +557,22 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                   final color = phase['color'] as Color;
 
                   return GestureDetector(
-                    onTap: () => setState(() => _activeStepIndex = i),
+                    onTap: () {
+                      setState(() {
+                        _activeStepIndex = i;
+                        const phasePrompts = [
+                          'Ceritakan apa yang sebenarnya terjadi secara objektif? Kapan, di mana, dan siapa yang terlibat?',
+                          'Apa yang Anda rasakan saat peristiwa itu terjadi dan sesudahnya? Ada rasa cemas, ragu, atau bersalah?',
+                          'Apa aspek yang menurut Anda berjalan baik, dan apa yang terasa kurang berhasil?',
+                          'Mengapa peristiwa tersebut terjadi seperti itu? Apa faktor klinis, komunikasi, atau sistem yang memengaruhinya?',
+                          'Apa pemahaman atau kesimpulan utama yang Anda peroleh tentang diri Anda dan situasi klinis ini?',
+                          'Jika situasi klinis serupa terjadi lagi di masa depan, apa rencana tindakan (SMART) yang akan Anda lakukan?',
+                        ];
+                        if (i < phasePrompts.length) {
+                          _activeQuestion = phasePrompts[i];
+                        }
+                      });
+                    },
                     child: Center(
                       child: Text(
                         '${phase['code']} ${phase['name']}',
@@ -481,6 +623,67 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
                 onSelectScenario: (scenarioPrompt) {
                   _sendMessage(scenarioPrompt);
                 },
+              ),
+
+            // Call-to-action banner: Selesai bercerita? Ekstrak Laporan Gibbs (AI)
+            if (_messages.where((m) => m.isUser).length >= 2)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: InkWell(
+                  onTap: _generateGibbsReport,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceWarm,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.35)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryTeal.withOpacity(0.06),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryTeal.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.auto_awesome, color: AppTheme.primaryTeal, size: 14),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Selesai berdiskusi? Buat Laporan Gibbs',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textInk,
+                                ),
+                              ),
+                              Text(
+                                'AI akan merangkum 6 fase, skor kedalaman, & SMART Plan',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10,
+                                  color: AppTheme.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.primaryTeal, size: 13),
+                      ],
+                    ),
+                  ),
+                ),
               ),
 
             // 6. CHAT INPUT BAR DENGAN MICROPHONE ICON

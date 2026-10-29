@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../models/gibbs_reflection.dart';
+import '../services/gibbs_extractor_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/depth_meter_widget.dart';
 import '../widgets/smart_action_card.dart';
@@ -23,6 +25,94 @@ class _GibbsReportScreenState extends State<GibbsReportScreen> {
   void initState() {
     super.initState();
     _reflection = widget.reflection;
+  }
+
+  Future<void> _reanalyzeWithAi() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: AppTheme.surfaceWarm,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primaryTeal,
+                    strokeWidth: 3.5,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Menilai Ulang Refleksi (AI)',
+                  style: GoogleFonts.newsreader(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textInk,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'AI sedang memperbarui skor kedalaman dan merevisi rekomendasi SMART Action Plan...',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: AppTheme.textMuted,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final profile = await StorageService.loadProfile();
+      final extractor = GibbsExtractorService(
+        apiKey: profile.geminiApiKey,
+        baseUrl: profile.apiBaseUrl,
+        modelName: profile.geminiModelName,
+      );
+
+      final updated = await extractor.analyzeAndEnrichReflection(
+        reflection: _reflection,
+        profile: profile,
+      );
+
+      await StorageService.saveReflection(updated);
+
+      if (mounted) {
+        Navigator.pop(context); // Tutup dialog
+        setState(() => _reflection = updated);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.primaryTeal,
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Skor kedalaman dan SMART Plan berhasil diperbarui oleh AI!',
+              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal evaluasi ulang: $e')),
+        );
+      }
+    }
   }
 
   void _editSection(String title, String currentText, Function(String newText) onSave) {
@@ -60,6 +150,11 @@ class _GibbsReportScreenState extends State<GibbsReportScreen> {
         title: const Text('Laporan Refleksi Gibbs', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
+            icon: const Icon(Icons.auto_awesome, color: AppTheme.accentAmber),
+            tooltip: 'Evaluasi Ulang dengan AI',
+            onPressed: _reanalyzeWithAi,
+          ),
+          IconButton(
             icon: const Icon(Icons.picture_as_pdf, color: AppTheme.primaryTeal),
             tooltip: 'Ekspor PDF',
             onPressed: () {
@@ -70,7 +165,7 @@ class _GibbsReportScreenState extends State<GibbsReportScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.copy_all_rounded, color: AppTheme.accentAmber),
+            icon: const Icon(Icons.copy_all_rounded, color: AppTheme.primaryTeal),
             tooltip: 'e-Portofolio 1-Click Sync',
             onPressed: () {
               Navigator.push(
@@ -124,27 +219,31 @@ class _GibbsReportScreenState extends State<GibbsReportScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Oleh: ${_reflection.studentName} (${_reflection.studentId}) · ${_reflection.hospital}',
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey[600]),
+                    'Mahasiswa: ${_reflection.studentName} (${_reflection.studentId})',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    'DPJP / Pembimbing: ${_reflection.supervisorName}',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
 
             // DEPTH METER WIDGET
             DepthMeterWidget(
               depth: _reflection.depthLevel,
               rationale: _reflection.depthRationale,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
 
-            // KUNCI PEMBELAJARAN (KEY TAKEAWAY)
+            // KEY TAKEAWAY CARD
             if (_reflection.keyTakeaway.isNotEmpty)
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
+                  color: const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFFDE68A)),
                 ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../core/theme/app_theme.dart';
 import '../models/gibbs_reflection.dart';
 import '../models/student_profile.dart';
@@ -29,11 +30,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     setState(() => _isLoading = true);
     final profile = await StorageService.loadProfile();
     final list = await StorageService.loadReflections();
-    setState(() {
-      _profile = profile;
-      _reflections = list;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _profile = profile;
+        _reflections = list;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -45,41 +48,77 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       );
     }
 
+    // 1. Hitung skor tiap tahap Gibbs secara dinamis dari arsip refleksi nyata
+    int descScore = 95;
+    int feelScore = 88;
+    int evalScore = 72;
+    int anaScore = 65;
+    int concScore = 80;
+    int planScore = 58;
+
+    if (_reflections.isNotEmpty) {
+      int descCount = 0;
+      int feelCount = 0;
+      int evalCount = 0;
+      int anaCount = 0;
+      int concCount = 0;
+      int planCount = 0;
+
+      for (final r in _reflections) {
+        if (r.description.trim().isNotEmpty) descCount++;
+        if (r.feelings.trim().isNotEmpty) feelCount++;
+        if (r.evaluation.trim().isNotEmpty) evalCount++;
+        if (r.analysis.trim().isNotEmpty) anaCount++;
+        if (r.conclusion.trim().isNotEmpty) concCount++;
+        if (r.actionPlan.trim().isNotEmpty) planCount++;
+      }
+
+      final total = _reflections.length;
+      descScore = ((descCount / total) * 100).round();
+      feelScore = ((feelCount / total) * 100).round();
+      evalScore = ((evalCount / total) * 100).round();
+      anaScore = ((anaCount / total) * 100).round();
+      concScore = ((concCount / total) * 100).round();
+      planScore = ((planCount / total) * 100).round();
+    }
+
     final gibbsStages = [
-      {'num': '01', 'name': 'Deskripsi', 'score': 95, 'color': AppTheme.stageDeskripsi},
-      {'num': '02', 'name': 'Perasaan', 'score': 88, 'color': AppTheme.stagePerasaan},
-      {'num': '03', 'name': 'Evaluasi', 'score': 72, 'color': AppTheme.stageEvaluasi},
-      {'num': '04', 'name': 'Analisis', 'score': 65, 'color': AppTheme.stageAnalisis},
-      {'num': '05', 'name': 'Kesimpulan', 'score': 80, 'color': AppTheme.stageKesimpulan},
-      {'num': '06', 'name': 'Rencana Aksi', 'score': 58, 'color': AppTheme.stageRencana},
+      {'num': '01', 'name': 'Deskripsi', 'score': descScore, 'color': AppTheme.stageDeskripsi},
+      {'num': '02', 'name': 'Perasaan', 'score': feelScore, 'color': AppTheme.stagePerasaan},
+      {'num': '03', 'name': 'Evaluasi', 'score': evalScore, 'color': AppTheme.stageEvaluasi},
+      {'num': '04', 'name': 'Analisis', 'score': anaScore, 'color': AppTheme.stageAnalisis},
+      {'num': '05', 'name': 'Kesimpulan', 'score': concScore, 'color': AppTheme.stageKesimpulan},
+      {'num': '06', 'name': 'Rencana Aksi', 'score': planScore, 'color': AppTheme.stageRencana},
     ];
 
-    final recentCases = [
-      {
-        'id': '012',
-        'title': 'Penanganan Pasien Hipertensi Krisis',
-        'dept': 'KARDIOLOGI',
-        'date': '15 SEP',
-        'score': 82,
-        'color': AppTheme.catKardiologi,
-      },
-      {
-        'id': '011',
-        'title': 'Kesalahan Dosis Obat pada Pediatri',
-        'dept': 'FARMAKOLOGI',
-        'date': '12 SEP',
-        'score': 91,
-        'color': AppTheme.primaryTeal,
-      },
-      {
-        'id': '010',
-        'title': 'Komunikasi dengan Keluarga Pasien',
-        'dept': 'KOMUNIKASI',
-        'date': '09 SEP',
-        'score': 76,
-        'color': AppTheme.catKomunikasi,
-      },
+    // Cari tahap dengan skor terendah untuk rekomendasi cerdas AI
+    var lowestStage = gibbsStages.first;
+    for (final s in gibbsStages) {
+      if ((s['score'] as int) < (lowestStage['score'] as int)) {
+        lowestStage = s;
+      }
+    }
+
+    // Hitung rata-rata skor kelengkapan
+    int avgScore = 84;
+    int completeCycles = 0;
+    if (_reflections.isNotEmpty) {
+      int sumScore = 0;
+      for (final r in _reflections) {
+        sumScore += r.completionPercentage;
+        if (r.isComplete) completeCycles++;
+      }
+      avgScore = (sumScore / _reflections.length).round();
+    }
+
+    // Format tanggal hari ini
+    final now = DateTime.now();
+    final dayNames = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU', 'MINGGU'];
+    final monthNames = [
+      'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
+      'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'
     ];
+    final todayFormatted = '${dayNames[now.weekday - 1]}, ${now.day} ${monthNames[now.month - 1]}';
 
     return Scaffold(
       backgroundColor: AppTheme.parchmentBg,
@@ -94,7 +133,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'SELASA, 22 SEPTEMBER',
+                    todayFormatted,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -105,7 +144,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   InkWell(
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Semua notifikasi pembimbing sudah dibaca.')),
+                        const SnackBar(content: Text('Semua notifikasi pembimbing klinis sudah tersinkron.')),
                       );
                     },
                     child: Stack(
@@ -142,27 +181,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                _profile.fullName.isNotEmpty ? _profile.fullName : 'dr. Ahmad Fauzi',
+                _profile.fullName.isNotEmpty ? _profile.fullName : 'dr. Mahasiswa Kedokteran',
                 style: GoogleFonts.newsreader(
-                  fontSize: 30,
+                  fontSize: 28,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textInk,
-                  height: 1.1,
+                  height: 1.15,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                'PPDS INTERNA · FKUI · TAHUN II',
+                '${_profile.currentDepartment.toUpperCase()} · ${_profile.university.toUpperCase()} · ${_profile.studentId}',
                 style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1.2,
                   color: AppTheme.primaryTeal,
                 ),
               ),
               const SizedBox(height: 20),
 
-              // 3. STATS ROW (12 REFLEKSI | 07 STREAK | 04 SIKLUS | 87 SKOR)
+              // 3. STATS ROW (REFLEKSI | STREAK | SIKLUS PENUH | RATA SKOR)
               Container(
                 decoration: const BoxDecoration(
                   border: Border(
@@ -173,13 +212,21 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 child: Row(
                   children: [
-                    _buildStatCol(_reflections.isNotEmpty ? (_reflections.length < 10 ? '0${_reflections.length}' : '${_reflections.length}') : '12', 'REFLEKSI'),
+                    _buildStatCol(
+                      _reflections.isNotEmpty
+                          ? (_reflections.length < 10 ? '0${_reflections.length}' : '${_reflections.length}')
+                          : '00',
+                      'REFLEKSI',
+                    ),
                     Container(width: 1, height: 36, color: const Color(0xFFE5DDD1)),
-                    _buildStatCol('07', 'STREAK'),
+                    _buildStatCol('07', 'STREAK HARI'),
                     Container(width: 1, height: 36, color: const Color(0xFFE5DDD1)),
-                    _buildStatCol('04', 'SIKLUS'),
+                    _buildStatCol(
+                      completeCycles < 10 ? '0$completeCycles' : '$completeCycles',
+                      'SIKLUS LENGKAP',
+                    ),
                     Container(width: 1, height: 36, color: const Color(0xFFE5DDD1)),
-                    _buildStatCol('87', 'SKOR'),
+                    _buildStatCol('$avgScore', 'RATA SKOR'),
                   ],
                 ),
               ),
@@ -194,7 +241,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primaryTeal.withValues(alpha: 0.18),
+                      color: AppTheme.primaryTeal.withOpacity(0.18),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -220,7 +267,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Fokuskan sesi berikutnya pada tahap Rencana Aksi — skormu masih 58%.',
+                      'Fokuskan sesi berikutnya pada tahap ${lowestStage['name']} — kelengkapanmu masih ${lowestStage['score']}%.',
                       style: GoogleFonts.newsreader(
                         fontSize: 16,
                         fontStyle: FontStyle.italic,
@@ -231,11 +278,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     const SizedBox(height: 14),
                     GestureDetector(
                       onTap: () {
-                        // Switch to reflection form tab (index 2)
+                        // Buka chat mentor interaktif (tab index 1)
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const MainNavigationScaffold(initialIndex: 2),
+                            builder: (_) => const MainNavigationScaffold(initialIndex: 1),
                           ),
                         );
                       },
@@ -243,16 +290,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'MULAI REFLEKSI',
+                            'KONSULTASI AI MENTOR',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.2,
-                              color: const Color(0xFF80CBC4),
+                              color: Colors.white,
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Icon(Icons.arrow_forward, size: 14, color: Color(0xFF80CBC4)),
+                          const Icon(Icons.arrow_forward, size: 14, color: Colors.white),
                         ],
                       ),
                     ),
@@ -261,38 +308,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
               const SizedBox(height: 24),
 
-              // 5. AKSI CEPAT (3 Cards)
-              Text(
-                'AKSI CEPAT',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                  color: AppTheme.textMuted,
-                ),
-              ),
-              const SizedBox(height: 12),
+              // 5. QUICK ACTIONS GRID
               Row(
                 children: [
                   Expanded(
                     child: _buildQuickActionCard(
-                      icon: Icons.edit_outlined,
-                      title: 'Refleksi\nBaru',
-                      onTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MainNavigationScaffold(initialIndex: 2),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildQuickActionCard(
-                      icon: Icons.headphones_outlined,
-                      title: 'Tanya\nReflectMed\nAI',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'Dialog AI\nMentor',
                       onTap: () {
                         Navigator.pushReplacement(
                           context,
@@ -306,8 +328,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _buildQuickActionCard(
+                      icon: Icons.draw_outlined,
+                      title: 'Formulir\nGibbs 6 Fase',
+                      onTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainNavigationScaffold(initialIndex: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildQuickActionCard(
                       icon: Icons.show_chart,
-                      title: 'Progres\n',
+                      title: 'Analitik\nKompetensi',
                       onTap: () {
                         Navigator.pushReplacement(
                           context,
@@ -345,7 +382,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       );
                     },
                     child: Text(
-                      'LIHAT SEMUA →',
+                      'DETAIL LENGKAP →',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
@@ -358,13 +395,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
               const SizedBox(height: 14),
 
-              // 6 Progress rows
+              // 6 Baris Kemajuan Siklus
               Column(
                 children: gibbsStages.map((stage) {
                   final score = stage['score'] as int;
                   final color = stage['color'] as Color;
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 7),
                     child: Row(
                       children: [
                         Text(
@@ -378,7 +415,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         ),
                         const SizedBox(width: 12),
                         SizedBox(
-                          width: 86,
+                          width: 90,
                           child: Text(
                             stage['name'] as String,
                             style: GoogleFonts.plusJakartaSans(
@@ -392,7 +429,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
-                              value: score / 100,
+                              value: (score / 100).clamp(0.0, 1.0),
                               backgroundColor: const Color(0xFFE8DFD3),
                               valueColor: AlwaysStoppedAnimation<Color>(color),
                               minHeight: 7,
@@ -401,12 +438,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         ),
                         const SizedBox(width: 14),
                         SizedBox(
-                          width: 24,
+                          width: 32,
                           child: Text(
-                            '$score',
+                            '$score%',
                             textAlign: TextAlign.end,
                             style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: color,
                             ),
@@ -419,7 +456,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
               const SizedBox(height: 28),
 
-              // 7. REFLEKSI TERBARU
+              // 7. REFLEKSI TERBARU (SINKRON DENGAN DATA NYATA)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -442,7 +479,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       );
                     },
                     child: Text(
-                      'ARSIP →',
+                      'SEMUA ARSIP →',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
@@ -453,103 +490,180 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
-              // 3 Recent Cases
-              Column(
-                children: recentCases.map((item) {
-                  final color = item['color'] as Color;
-                  return InkWell(
-                    onTap: () {
-                      final dummy = GibbsReflection(
-                        id: item['id'] as String,
-                        createdAt: DateTime.now(),
-                        title: item['title'] as String,
-                        department: item['dept'] as String,
-                        description: 'Ringkasan refleksi klinis kasus.',
-                      );
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => GibbsReportScreen(reflection: dummy),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: Color(0xFFEAE3D9), width: 1),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['id'] as String,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textLight,
-                            ),
+              // List Refleksi Nyata
+              if (_reflections.isNotEmpty)
+                Column(
+                  children: _reflections.take(4).map((item) {
+                    final colors = [
+                      AppTheme.catKardiologi,
+                      AppTheme.primaryTeal,
+                      AppTheme.catKomunikasi,
+                      AppTheme.stageKesimpulan,
+                    ];
+                    final color = colors[_reflections.indexOf(item) % colors.length];
+                    final dateStr = '${item.createdAt.day} ${_shortMonth(item.createdAt.month)}';
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => GibbsReportScreen(reflection: item),
                           ),
-                          const SizedBox(width: 10),
-                          Container(
-                            width: 3,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+                        );
+                      },
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Color(0xFFEAE3D9), width: 1),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '00${_reflections.indexOf(item) + 1}',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textLight,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              width: 3.5,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.title,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.textInk,
+                                      height: 1.25,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${item.department.toUpperCase()} · $dateStr · ${item.depthLabel}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.6,
+                                      color: AppTheme.textLight,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  item['title'] as String,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 13.5,
+                                  '${item.completionPercentage}%',
+                                  style: GoogleFonts.newsreader(
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w700,
-                                    color: AppTheme.textInk,
-                                    height: 1.25,
+                                    color: color,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
                                 Text(
-                                  '${item['dept']} · ${item['date']}',
+                                  'Lengkap',
                                   style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.8,
+                                    fontSize: 9,
                                     color: AppTheme.textLight,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${item['score']}',
-                            style: GoogleFonts.newsreader(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                              color: color,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
+                    );
+                  }).toList(),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceWarm,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppTheme.lightBorder),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.draw_outlined, size: 36, color: AppTheme.primaryTeal),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Belum Ada Refleksi Tersimpan',
+                        style: GoogleFonts.newsreader(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textInk,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Mulai bedah kasus klinis pertama Anda dengan panduan Sokratik dr. Mentor AI untuk mengasah kematangan klinis.',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          color: AppTheme.textMuted,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 14),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryTeal,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        ),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                        label: Text(
+                          'Mulai Refleksi Sekarang',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MainNavigationScaffold(initialIndex: 1),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 24),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _shortMonth(int month) {
+    const m = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGT', 'SEP', 'OKT', 'NOV', 'DES'];
+    return m[(month - 1).clamp(0, 11)];
   }
 
   Widget _buildStatCol(String value, String label) {
@@ -559,8 +673,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           Text(
             value,
             style: GoogleFonts.newsreader(
-              fontSize: 26,
-              fontWeight: FontWeight.w600,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
               color: AppTheme.textInk,
               height: 1.0,
             ),
@@ -569,11 +683,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           Text(
             label,
             style: GoogleFonts.plusJakartaSans(
-              fontSize: 9.5,
+              fontSize: 9,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
+              letterSpacing: 0.8,
               color: AppTheme.textLight,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -589,7 +704,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: 104,
+        height: 100,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppTheme.surfaceWarm,
@@ -604,7 +719,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             Text(
               title,
               style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textInk,
                 height: 1.2,
