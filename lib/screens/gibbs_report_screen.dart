@@ -147,7 +147,7 @@ class _GibbsReportScreenState extends State<GibbsReportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Laporan Refleksi Gibbs', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Laporan Gibbs', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.auto_awesome, color: AppTheme.accentAmber),
@@ -361,7 +361,7 @@ class _GibbsReportScreenState extends State<GibbsReportScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 60),
           ],
         ),
       ),

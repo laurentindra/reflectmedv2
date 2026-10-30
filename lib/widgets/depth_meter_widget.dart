@@ -51,22 +51,20 @@ class DepthMeterWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.psychology, color: activeColor, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Kedalaman Refleksi (AMEE Guide 44)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
+              Icon(Icons.psychology, color: activeColor, size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Kedalaman Refleksi (AMEE 44)',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[700],
                   ),
-                ],
+                ),
               ),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -76,7 +74,7 @@ class DepthMeterWidget extends StatelessWidget {
                 child: Text(
                   badgeText,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.bold,
                     color: activeColor,
                   ),
