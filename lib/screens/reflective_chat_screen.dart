@@ -346,17 +346,26 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
       if (_aiService.lastError != null && mounted) {
         final err = _aiService.lastError!;
         final isAuthErr = err.contains('invalid authentication') || err.contains('API key not valid');
+        final isNetErr = err.contains('Failed host lookup') || err.contains('SocketException') || err.contains('Network is unreachable') || err.contains('errno = 7');
+
+        String message;
+        if (isAuthErr) {
+          message = 'Kunci API Gemini tidak valid (Google mewajibkan format resmi awalan "AIzaSy..."). Masuk ke Pengaturan untuk memperbarui.';
+        } else if (isNetErr) {
+          message = 'Koneksi internet terputus atau gagal menghubungi server TokenGateway (AI otomatis beralih ke Mode Mentor Offline).';
+        } else {
+          message = 'Koneksi AI: $err';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF991B1B),
             behavior: SnackBarBehavior.floating,
             content: Text(
-              isAuthErr
-                  ? 'Kunci API Gemini tidak valid (Google mewajibkan format resmi awalan "AIzaSy..."). Masuk ke Pengaturan untuk memperbarui.'
-                  : 'Koneksi AI: $err',
+              message,
               style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
             ),
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
