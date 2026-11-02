@@ -16,7 +16,7 @@ class StudentProfile {
     this.currentDepartment = 'Ilmu Penyakit Dalam',
     this.teachingHospital = 'RSUP Pendidikan Utama',
     this.supervisorName = 'dr. Sp.PD, Subsp. (K)',
-    this.geminiApiKey = 'tk-gw-46b82e15f253e09d47829bd9712d2d3df6104ea2b57af30e88e80aa076a9f7c7',
+    this.geminiApiKey = 'tk-gw-1497088843dae48fd56bf0ea0ff10a52ea80886e047360371e1aab2f9d00c394',
     this.geminiModelName = 'glm-5.3-flash',
     this.apiBaseUrl = 'https://tokengateway.ai.id/v1',
   });
@@ -35,9 +35,11 @@ class StudentProfile {
 
   factory StudentProfile.fromJson(Map<String, dynamic> json) {
     final savedKey = json['geminiApiKey'] as String?;
-    final key = (savedKey != null && savedKey.trim().isNotEmpty)
+    final key = (savedKey != null &&
+            savedKey.trim().isNotEmpty &&
+            !savedKey.contains('tk-gw-46b82e15'))
         ? savedKey.trim()
-        : 'tk-gw-46b82e15f253e09d47829bd9712d2d3df6104ea2b57af30e88e80aa076a9f7c7';
+        : 'tk-gw-1497088843dae48fd56bf0ea0ff10a52ea80886e047360371e1aab2f9d00c394';
 
     final savedModel = json['geminiModelName'] as String?;
     final model = (savedModel != null &&

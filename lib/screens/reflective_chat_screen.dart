@@ -347,10 +347,16 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
         final err = _aiService.lastError!;
         final isAuthErr = err.contains('invalid authentication') || err.contains('API key not valid');
         final isNetErr = err.contains('Failed host lookup') || err.contains('SocketException') || err.contains('Network is unreachable') || err.contains('errno = 7');
+        final isRedirectLoop = err.contains('HTTP 308') || err.contains('Permanent Redirect') || err.contains('301');
+        final isServerDown = err.contains('HTTP 502') || err.contains('HTTP 522') || err.contains('HTTP 500');
 
         String message;
         if (isAuthErr) {
           message = 'Kunci API Gemini tidak valid (Google mewajibkan format resmi awalan "AIzaSy..."). Masuk ke Pengaturan untuk memperbarui.';
+        } else if (isRedirectLoop) {
+          message = 'Server penyedia TokenGateway sedang mengalami gangguan konfigurasi Cloudflare (HTTP 308 Redirect Loop dari penyedia). AI beralih aman ke Mode Mentor Offline.';
+        } else if (isServerDown) {
+          message = 'Server TokenGateway sedang offline / dalam pemeliharaan (HTTP 5xx). AI beralih ke Mode Mentor Offline.';
         } else if (isNetErr) {
           message = 'Koneksi internet terputus atau gagal menghubungi server TokenGateway (AI otomatis beralih ke Mode Mentor Offline).';
         } else {
