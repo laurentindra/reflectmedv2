@@ -8,7 +8,7 @@ import 'ai_training_service.dart';
 class GeminiAiService {
   String? _apiKey;
   String _modelName = 'glm-5.3-flash';
-  String _apiBaseUrl = 'https://tokengateway.ai.id/v1';
+  String _apiBaseUrl = 'https://tokengateway.dev/v1';
   GenerativeModel? _geminiModel;
 
   void updateApiKey(String? key, {String? modelName, String? baseUrl}) {

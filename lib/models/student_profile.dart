@@ -18,7 +18,7 @@ class StudentProfile {
     this.supervisorName = 'dr. Sp.PD, Subsp. (K)',
     this.geminiApiKey = 'tk-gw-1497088843dae48fd56bf0ea0ff10a52ea80886e047360371e1aab2f9d00c394',
     this.geminiModelName = 'glm-5.3-flash',
-    this.apiBaseUrl = 'https://tokengateway.ai.id/v1',
+    this.apiBaseUrl = 'https://tokengateway.dev/v1',
   });
 
   Map<String, dynamic> toJson() => {
@@ -51,9 +51,11 @@ class StudentProfile {
         : 'glm-5.3-flash';
 
     final savedUrl = json['apiBaseUrl'] as String?;
-    final url = (savedUrl != null && savedUrl.trim().isNotEmpty)
+    final url = (savedUrl != null &&
+            savedUrl.trim().isNotEmpty &&
+            !savedUrl.contains('tokengateway.ai.id'))
         ? savedUrl.trim()
-        : 'https://tokengateway.ai.id/v1';
+        : 'https://tokengateway.dev/v1';
 
     return StudentProfile(
       fullName: json['fullName'] ?? 'dr. Muda / Mahasiswa Kedokteran',

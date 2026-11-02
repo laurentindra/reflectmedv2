@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 /// Mengarahkan koneksi ke IP Anycast resmi secara langsung dan menangani TLS/HTTPS handshake.
 class ResilientHttpOverrides extends HttpOverrides {
   static final Map<String, List<String>> _knownIps = {
+    'tokengateway.dev': ['104.21.92.43', '172.67.186.53'],
     'tokengateway.ai.id': ['104.21.26.158', '172.67.137.36'],
   };
 

@@ -87,7 +87,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 controller: urlCtrl,
                 decoration: const InputDecoration(
                   labelText: 'API Base URL Gateway',
-                  hintText: 'https://tokengateway.ai.id/v1',
+                  hintText: 'https://tokengateway.dev/v1',
                   helperText: 'Endpoint gateway OpenAI / TokenGateway',
                 ),
               ),
@@ -127,7 +127,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               _profile.supervisorName = supCtrl.text.trim();
               _profile.geminiApiKey = rawKey;
               _profile.geminiModelName = rawModel;
-              _profile.apiBaseUrl = rawUrl.isNotEmpty ? rawUrl : 'https://tokengateway.ai.id/v1';
+              _profile.apiBaseUrl = rawUrl.isNotEmpty ? rawUrl : 'https://tokengateway.dev/v1';
 
               await StorageService.saveProfile(_profile);
               if (mounted) {

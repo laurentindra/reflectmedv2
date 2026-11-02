@@ -52,7 +52,7 @@ class GibbsExtractorService {
     try {
       final effectiveUrl = baseUrl?.trim().isNotEmpty == true
           ? baseUrl!.trim()
-          : 'https://tokengateway.ai.id/v1';
+          : 'https://tokengateway.dev/v1';
       final endpoint = effectiveUrl.endsWith('/')
           ? '${effectiveUrl}chat/completions'
           : '$effectiveUrl/chat/completions';
