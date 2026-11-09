@@ -17,7 +17,8 @@ class GibbsFormScreen extends StatefulWidget {
 
 class _GibbsFormScreenState extends State<GibbsFormScreen> {
   int _currentStep = 1; // 1 to 6
-  final TextEditingController _titleController = TextEditingController(text: 'Penanganan STEMI Pertama di IGD');
+  final TextEditingController _titleController =
+      TextEditingController(text: 'Penanganan STEMI Pertama di IGD');
   final TextEditingController _stageTextController = TextEditingController();
 
   StudentProfile _profile = StudentProfile();
@@ -37,37 +38,43 @@ class _GibbsFormScreenState extends State<GibbsFormScreen> {
     {
       'tag': 'Deskripsi',
       'q': 'Apa yang terjadi?',
-      'guide': 'Jelaskan situasi secara objektif: apa yang terjadi, siapa yang terlibat, kapan dan di mana, serta konteks klinisnya.',
+      'guide':
+          'Jelaskan situasi secara objektif: apa yang terjadi, siapa yang terlibat, kapan dan di mana, serta konteks klinisnya.',
       'color': AppTheme.stageDeskripsi,
     },
     {
       'tag': 'Perasaan',
       'q': 'Apa yang Anda rasakan?',
-      'guide': 'Gali respon emosional dan pikiran Anda saat peristiwa terjadi maupun sesudahnya secara jujur dan terbuka.',
+      'guide':
+          'Gali respon emosional dan pikiran Anda saat peristiwa terjadi maupun sesudahnya secara jujur dan terbuka.',
       'color': AppTheme.stagePerasaan,
     },
     {
       'tag': 'Evaluasi',
       'q': 'Apa yang baik dan buruk?',
-      'guide': 'Evaluasi apa yang berjalan lancar dalam penanganan, dan apa aspek yang dirasa kurang berhasil atau menantang.',
+      'guide':
+          'Evaluasi apa yang berjalan lancar dalam penanganan, dan apa aspek yang dirasa kurang berhasil atau menantang.',
       'color': AppTheme.stageEvaluasi,
     },
     {
       'tag': 'Analisis',
       'q': 'Mengapa hal itu terjadi?',
-      'guide': 'Analisis situasi lebih dalam: kaitkan dengan literatur kedokteran berbasis bukti, kerja tim, dan faktor pendukung.',
+      'guide':
+          'Analisis situasi lebih dalam: kaitkan dengan literatur kedokteran berbasis bukti, kerja tim, dan faktor pendukung.',
       'color': AppTheme.stageAnalisis,
     },
     {
       'tag': 'Kesimpulan',
       'q': 'Apa pelajaran bagi Anda?',
-      'guide': 'Simpulkan apa yang seharusnya bisa dilakukan secara berbeda dan pelajaran penting bagi pertumbuhan profesional Anda.',
+      'guide':
+          'Simpulkan apa yang seharusnya bisa dilakukan secara berbeda dan pelajaran penting bagi pertumbuhan profesional Anda.',
       'color': AppTheme.stageKesimpulan,
     },
     {
       'tag': 'Rencana Aksi',
       'q': 'Apa rencana tindak lanjut?',
-      'guide': 'Rumuskan komitmen tindakan nyata terstruktur (SMART) jika Anda menghadapi skenario klinis serupa di masa depan.',
+      'guide':
+          'Rumuskan komitmen tindakan nyata terstruktur (SMART) jika Anda menghadapi skenario klinis serupa di masa depan.',
       'color': AppTheme.stageRencana,
     },
   ];
@@ -246,182 +253,193 @@ class _GibbsFormScreenState extends State<GibbsFormScreen> {
     }
   }
 
+  void _previousStep() {
+    if (_currentStep == 1) return;
+
+    _stageTexts[_currentStep] = _stageTextController.text.trim();
+    _switchStep(_currentStep - 1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentMeta = _stepMeta[_currentStep - 1];
     final charCount = _stageTextController.text.length;
 
-    return Scaffold(
-      backgroundColor: AppTheme.parchmentBg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. TOP HEADER (FORMULIR REFLEKSI GIBBS & 01 / 06)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'FORMULIR REFLEKSI GIBBS',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-                  Text(
-                    '0$_currentStep / 06',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.0,
-                      color: AppTheme.textInk,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // 2. SIX CAPSULE DASHES PROGRESS BAR
-              Row(
-                children: List.generate(6, (index) {
-                  final isActive = (index + 1) <= _currentStep;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => _switchStep(index + 1),
-                      child: Container(
-                        height: 4.5,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: isActive ? AppTheme.primaryTeal : const Color(0xFFDDD6CA),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
+    return PopScope(
+      canPop: _currentStep > 1,
+      child: Scaffold(
+        backgroundColor: AppTheme.parchmentBg,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. TOP HEADER (FORMULIR REFLEKSI GIBBS & 01 / 06)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'FORMULIR REFLEKSI GIBBS',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                        color: AppTheme.textMuted,
                       ),
                     ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 26),
-
-              // 3. STEP EYEBROW & TITLE (Apa yang terjadi?)
-              Text(
-                'TAHAP $_currentStep · ${(currentMeta['tag'] as String).toUpperCase()}',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                  color: AppTheme.primaryTeal,
+                    Text(
+                      '0$_currentStep / 06',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: AppTheme.textInk,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                currentMeta['q'] as String,
-                style: GoogleFonts.newsreader(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textInk,
-                  height: 1.15,
-                ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 12),
 
-              // 4. JUDUL KEJADIAN KLINIS (Step 1 or persistent)
-              if (_currentStep == 1) ...[
+                // 2. SIX CAPSULE DASHES PROGRESS BAR
+                Row(
+                  children: List.generate(6, (index) {
+                    final isActive = (index + 1) <= _currentStep;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => _switchStep(index + 1),
+                        child: Container(
+                          height: 4.5,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppTheme.primaryTeal
+                                : const Color(0xFFDDD6CA),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 26),
+
+                // 3. STEP EYEBROW & TITLE (Apa yang terjadi?)
                 Text(
-                  'JUDUL KEJADIAN KLINIS',
+                  'TAHAP $_currentStep · ${(currentMeta['tag'] as String).toUpperCase()}',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: AppTheme.textMuted,
+                    letterSpacing: 1.5,
+                    color: AppTheme.primaryTeal,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceWarm,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.lightBorder),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: TextField(
-                    controller: _titleController,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textInk,
-                    ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 14),
-                    ),
+                const SizedBox(height: 6),
+                Text(
+                  currentMeta['q'] as String,
+                  style: GoogleFonts.newsreader(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textInk,
+                    height: 1.15,
                   ),
                 ),
-                const SizedBox(height: 20),
-              ],
+                const SizedBox(height: 24),
 
-              // 5. EDITORIAL GUIDANCE CALLOUT (Left vertical teal line & italic serif)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 3,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryTeal,
-                      borderRadius: BorderRadius.circular(2),
+                // 4. JUDUL KEJADIAN KLINIS (Step 1 or persistent)
+                if (_currentStep == 1) ...[
+                  Text(
+                    'JUDUL KEJADIAN KLINIS',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: AppTheme.textMuted,
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      currentMeta['guide'] as String,
-                      style: GoogleFonts.newsreader(
-                        fontSize: 15,
-                        fontStyle: FontStyle.italic,
-                        color: const Color(0xFF33423F),
-                        height: 1.45,
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceWarm,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.lightBorder),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: TextField(
+                      controller: _titleController,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textInk,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20),
                 ],
-              ),
-              const SizedBox(height: 20),
 
-              // 6. TEXTAREA CONTAINER
-              Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceWarm,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppTheme.lightBorder),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: TextField(
-                  controller: _stageTextController,
-                  maxLines: 8,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14.5,
-                    color: AppTheme.textInk,
-                    height: 1.5,
-                  ),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Tuliskan refleksi Anda di sini...',
-                    hintStyle: GoogleFonts.newsreader(
-                      fontSize: 14.5,
-                      fontStyle: FontStyle.italic,
-                      color: AppTheme.textLight,
+                // 5. EDITORIAL GUIDANCE CALLOUT (Left vertical teal line & italic serif)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryTeal,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  onChanged: (_) => setState(() {}),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        currentMeta['guide'] as String,
+                        style: GoogleFonts.newsreader(
+                          fontSize: 15,
+                          fontStyle: FontStyle.italic,
+                          color: const Color(0xFF33423F),
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 14),
+                const SizedBox(height: 20),
+
+                // 6. TEXTAREA CONTAINER
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceWarm,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppTheme.lightBorder),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: TextField(
+                    controller: _stageTextController,
+                    maxLines: 8,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14.5,
+                      color: AppTheme.textInk,
+                      height: 1.5,
+                    ),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Tuliskan refleksi Anda di sini...',
+                      hintStyle: GoogleFonts.newsreader(
+                        fontSize: 14.5,
+                        fontStyle: FontStyle.italic,
+                        color: AppTheme.textLight,
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(height: 14),
 
               // 7. ACTION STRIP & AI FEEDBACK
               Row(
@@ -550,38 +568,83 @@ class _GibbsFormScreenState extends State<GibbsFormScreen> {
               ),
               const SizedBox(height: 12),
 
-              // 8. NEXT BUTTON (Lanjutkan →)
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE8DFD3),
-                    foregroundColor: AppTheme.textInk,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: _nextStep,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _currentStep < 6 ? 'Lanjutkan' : 'Simpan & Buat Laporan',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w700,
+                Row(
+                  children: [
+                    if (_currentStep > 1) ...[
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE8DFD3),
+                              foregroundColor: AppTheme.textInk,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: _previousStep,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Kembali',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_back, size: 16),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward, size: 16),
+                      const SizedBox(width: 12),
                     ],
-                  ),
+                    Expanded(
+                      child: SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFE8DFD3),
+                            foregroundColor: AppTheme.textInk,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: _nextStep,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    _currentStep < 6
+                                        ? 'Lanjutkan'
+                                        : 'Buat Laporan',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_forward, size: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
