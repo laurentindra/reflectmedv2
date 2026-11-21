@@ -16,9 +16,9 @@ class StudentProfile {
     this.currentDepartment = 'Ilmu Penyakit Dalam',
     this.teachingHospital = 'RSUP Pendidikan Utama',
     this.supervisorName = 'dr. Sp.PD, Subsp. (K)',
-    this.geminiApiKey = 'tk-gw-1497088843dae48fd56bf0ea0ff10a52ea80886e047360371e1aab2f9d00c394',
-    this.geminiModelName = 'glm-5.3-flash',
-    this.apiBaseUrl = 'https://tokengateway.dev/v1',
+    this.geminiApiKey = '',
+    this.geminiModelName = 'gemini-2.5-flash',
+    this.apiBaseUrl = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -35,27 +35,27 @@ class StudentProfile {
 
   factory StudentProfile.fromJson(Map<String, dynamic> json) {
     final savedKey = json['geminiApiKey'] as String?;
-    final key = (savedKey != null &&
-            savedKey.trim().isNotEmpty &&
-            !savedKey.contains('tk-gw-46b82e15'))
-        ? savedKey.trim()
-        : 'tk-gw-1497088843dae48fd56bf0ea0ff10a52ea80886e047360371e1aab2f9d00c394';
+    final key = savedKey?.trim() ?? '';
 
     final savedModel = json['geminiModelName'] as String?;
-    final model = (savedModel != null &&
-            savedModel.trim().isNotEmpty &&
-            !savedModel.contains('deepseek') &&
-            !savedModel.contains('pass-glm') &&
-            !savedModel.contains('gemini'))
-        ? savedModel.trim()
-        : 'glm-5.3-flash';
+    final savedModelTrimmed = savedModel?.trim() ?? '';
+    final isGeminiKey =
+        key.startsWith('AIzaSy') || key.startsWith('AQ.Ab');
+    final model = isGeminiKey
+        ? (savedModelTrimmed.isEmpty ||
+                savedModelTrimmed.contains('deepseek') ||
+                savedModelTrimmed.contains('pass-glm') ||
+                savedModelTrimmed.contains('glm'))
+            ? 'gemini-2.5-flash'
+            : savedModelTrimmed
+        : (savedModelTrimmed.isNotEmpty &&
+                !savedModelTrimmed.contains('deepseek') &&
+                !savedModelTrimmed.contains('pass-glm'))
+            ? savedModelTrimmed
+            : 'glm-5.3-flash';
 
     final savedUrl = json['apiBaseUrl'] as String?;
-    final url = (savedUrl != null &&
-            savedUrl.trim().isNotEmpty &&
-            !savedUrl.contains('tokengateway.ai.id'))
-        ? savedUrl.trim()
-        : 'https://tokengateway.dev/v1';
+    final url = savedUrl?.trim() ?? '';
 
     return StudentProfile(
       fullName: json['fullName'] ?? 'dr. Muda / Mahasiswa Kedokteran',

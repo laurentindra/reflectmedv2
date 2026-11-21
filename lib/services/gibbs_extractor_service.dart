@@ -26,8 +26,8 @@ class GibbsExtractorService {
     final key = apiKey?.trim() ?? '';
     if (key.isEmpty) return null;
 
-    // 1. Jalur Google Gemini (AIzaSy...)
-    if (key.startsWith('AIzaSy')) {
+    // 1. Jalur Google Gemini
+    if (key.startsWith('AIzaSy') || key.startsWith('AQ.Ab')) {
       try {
         final model = GenerativeModel(
           model: (modelName != null &&

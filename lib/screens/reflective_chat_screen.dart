@@ -135,6 +135,15 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     } else {
       final lastAi = _messages.lastWhere((m) => !m.isUser, orElse: () => _messages.first);
       _activeQuestion = _extractQuestion(lastAi.text);
+      final lastPhase = lastAi.estimatedPhase;
+      if (lastPhase != null) {
+        final index = _gibbsPhases.indexWhere(
+          (phase) => phase['phase'] == lastPhase,
+        );
+        if (index >= 0) {
+          _activeStepIndex = index;
+        }
+      }
     }
   }
 
@@ -322,22 +331,38 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
     await StorageService.saveActiveChat(_messages);
 
     try {
-      final reply = await _aiService.sendMessage(text, _messages);
+      final activePhase =
+          _gibbsPhases[_activeStepIndex]['phase'] as GibbsPhase;
+      final evaluation = await _aiService.evaluateStage(
+        userText: text,
+        history: _messages,
+        activePhase: activePhase,
+      );
+
+      final reply = evaluation.displayText;
+      final resultPhase = evaluation.isComplete
+          ? (evaluation.nextPhase ??
+              activePhase)
+          : activePhase;
+      final aiPhaseIndex = _gibbsPhases.indexWhere(
+        (phase) => phase['phase'] == resultPhase,
+      );
 
       final aiMsg = ChatMessage(
         id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
         text: reply,
         isUser: false,
         timestamp: DateTime.now(),
-        estimatedPhase: _gibbsPhases[_activeStepIndex]['phase'] as GibbsPhase,
+        estimatedPhase: aiPhaseIndex >= 0 ? resultPhase : activePhase,
       );
 
       setState(() {
         _messages.add(aiMsg);
         _isTyping = false;
-        if (_activeStepIndex < _gibbsPhases.length - 1) {
-          _activeStepIndex++;
+        if (evaluation.isComplete && aiPhaseIndex >= 0) {
+          _activeStepIndex = aiPhaseIndex;
         }
+        _activeQuestion = _extractQuestion(reply);
       });
       _triggerMentorSpeaking(reply);
       _scrollToBottom();
@@ -352,7 +377,7 @@ class _ReflectiveChatScreenState extends State<ReflectiveChatScreen> {
 
         String message;
         if (isAuthErr) {
-          message = 'Kunci API Gemini tidak valid (Google mewajibkan format resmi awalan "AIzaSy..."). Masuk ke Pengaturan untuk memperbarui.';
+          message = 'Kunci API Gemini tidak valid. Masuk ke Pengaturan untuk memeriksa key Gemini dan model.';
         } else if (isRedirectLoop) {
           message = 'Server penyedia TokenGateway sedang mengalami gangguan konfigurasi Cloudflare (HTTP 308 Redirect Loop dari penyedia). AI beralih aman ke Mode Mentor Offline.';
         } else if (isServerDown) {

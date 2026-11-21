@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../models/student_profile.dart';
 import '../services/storage_service.dart';
+import '../services/gemini_ai_service.dart';
 import 'ai_training_studio_screen.dart';
 import 'onboarding_welcome_screen.dart';
 import 'login_auth_screen.dart';
@@ -44,17 +45,27 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.parchmentBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Edit Profil Dokter & Pengaturan AI',
-          style: GoogleFonts.newsreader(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textInk),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final isGeminiKey =
+              keyCtrl.text.trim().startsWith('AIzaSy') ||
+              keyCtrl.text.trim().startsWith('AQ.Ab');
+
+          return AlertDialog(
+            backgroundColor: AppTheme.parchmentBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              'Edit Profil Dokter & Pengaturan AI',
+              style: GoogleFonts.newsreader(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textInk,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
               TextField(
                 controller: nameCtrl,
                 decoration: const InputDecoration(labelText: 'Nama Lengkap'),
@@ -77,26 +88,28 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               TextField(
                 controller: keyCtrl,
+                onChanged: (_) => setDialogState(() {}),
                 decoration: const InputDecoration(
                   labelText: 'API Key (TokenGateway / Gemini)',
-                  hintText: 'tk-gw-... atau AIzaSy...',
-                  helperText: 'TokenGateway: tk-gw-... | Gemini: AIzaSy...',
+                  hintText: 'tk-gw-... atau kunci Gemini',
+                  helperText: 'TokenGateway: tk-gw-... | Gemini: AIzaSy... atau AQ.Ab...',
                 ),
               ),
-              TextField(
-                controller: urlCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'API Base URL Gateway',
-                  hintText: 'https://tokengateway.dev/v1',
-                  helperText: 'Endpoint gateway OpenAI / TokenGateway',
+              if (!isGeminiKey)
+                TextField(
+                  controller: urlCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'API Base URL Gateway',
+                    hintText: 'https://tokengateway.dev/v1',
+                    helperText: 'Endpoint gateway OpenAI / TokenGateway',
+                  ),
                 ),
-              ),
               TextField(
                 controller: modelCtrl,
                 decoration: const InputDecoration(
                   labelText: 'ID Model AI',
-                  hintText: 'glm-5.3-flash atau gemini-1.5-flash',
-                  helperText: 'Model aktif di TokenGateway (misal: glm-5.3-flash)',
+                  hintText: 'gemini-2.5-flash atau glm-5.3-flash',
+                  helperText: 'Gemini: gemini-2.5-flash | TokenGateway: glm-5.3-flash',
                 ),
               ),
             ],
@@ -116,8 +129,22 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               final rawKey = keyCtrl.text.trim();
               final rawUrl = urlCtrl.text.trim();
               String rawModel = modelCtrl.text.trim();
-              if (rawModel.isEmpty || rawModel.contains('deepseek') || rawModel.contains('pass-glm')) {
-                rawModel = 'glm-5.3-flash';
+              final isGeminiKey =
+                  rawKey.startsWith('AIzaSy') ||
+                  rawKey.startsWith('AQ.Ab');
+              if (isGeminiKey) {
+                if (rawModel.isEmpty ||
+                    rawModel.contains('deepseek') ||
+                    rawModel.contains('pass-glm') ||
+                    rawModel.contains('glm')) {
+                  rawModel = 'gemini-2.5-flash';
+                }
+              } else if (rawKey.startsWith('tk-gw-')) {
+                if (rawModel.isEmpty ||
+                    rawModel.contains('deepseek') ||
+                    rawModel.contains('pass-glm')) {
+                  rawModel = 'glm-5.3-flash';
+                }
               }
 
               _profile.fullName = nameCtrl.text.trim();
@@ -127,20 +154,47 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               _profile.supervisorName = supCtrl.text.trim();
               _profile.geminiApiKey = rawKey;
               _profile.geminiModelName = rawModel;
-              _profile.apiBaseUrl = rawUrl.isNotEmpty ? rawUrl : 'https://tokengateway.dev/v1';
+              _profile.apiBaseUrl = isGeminiKey
+                  ? ''
+                  : (rawUrl.isNotEmpty ? rawUrl : 'https://tokengateway.dev/v1');
 
               await StorageService.saveProfile(_profile);
+              final persistedProfile = await StorageService.loadProfile();
+
+              bool geminiConnected = false;
+              String connectionMessage = '';
+              if (isGeminiKey) {
+                final aiService = GeminiAiService();
+                aiService.updateApiKey(
+                  rawKey,
+                  modelName: rawModel,
+                  baseUrl: '',
+                );
+                geminiConnected = await aiService.testConnection();
+                connectionMessage = geminiConnected
+                    ? 'Gemini berhasil terhubung!'
+                    : 'Gemini gagal terhubung: ${aiService.lastError ?? "Periksa API key dan model."}';
+              }
+
               if (mounted) {
-                setState(() {});
+                setState(() {
+                  _profile = persistedProfile;
+                });
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    backgroundColor: AppTheme.primaryTeal,
+                    backgroundColor: geminiConnected
+                        ? AppTheme.primaryTeal
+                        : (isGeminiKey
+                            ? const Color(0xFF991B1B)
+                            : AppTheme.primaryTeal),
                     behavior: SnackBarBehavior.floating,
                     content: Text(
-                      rawKey.startsWith('tk-gw-')
-                          ? 'TokenGateway GLM 5.3 Flash berhasil terhubung!'
-                          : 'Pengaturan profil dan AI berhasil disimpan!',
+                      isGeminiKey
+                          ? connectionMessage
+                          : (rawKey.startsWith('tk-gw-')
+                              ? 'TokenGateway berhasil disimpan!'
+                              : 'Pengaturan profil dan AI berhasil disimpan!'),
                       style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
                     ),
                   ),
@@ -150,6 +204,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             child: Text('Simpan', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
           ),
         ],
+          );
+        },
       ),
     );
   }

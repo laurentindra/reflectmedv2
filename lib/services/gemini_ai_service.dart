@@ -5,11 +5,36 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/chat_message.dart';
 import 'ai_training_service.dart';
 
+class GibbsStageEvaluation {
+  final bool isComplete;
+  final String feedback;
+  final GibbsPhase? nextPhase;
+  final String question;
+
+  const GibbsStageEvaluation({
+    required this.isComplete,
+    required this.feedback,
+    required this.nextPhase,
+    required this.question,
+  });
+
+  String get displayText {
+    if (feedback.trim().isEmpty) return question;
+    if (question.trim().isEmpty) return feedback;
+    return '${feedback.trim()}\n\n${question.trim()}';
+  }
+}
+
 class GeminiAiService {
   String? _apiKey;
   String _modelName = 'glm-5.3-flash';
   String _apiBaseUrl = 'https://tokengateway.dev/v1';
   GenerativeModel? _geminiModel;
+
+  bool _isGeminiKey(String? key) {
+    final value = key?.trim() ?? '';
+    return value.startsWith('AIzaSy') || value.startsWith('AQ.Ab');
+  }
 
   void updateApiKey(String? key, {String? modelName, String? baseUrl}) {
     _apiKey = key;
@@ -21,17 +46,16 @@ class GeminiAiService {
         _modelName = m;
       }
     }
-    if (baseUrl != null && baseUrl.trim().isNotEmpty) {
-      _apiBaseUrl = baseUrl.trim();
-    }
+    _apiBaseUrl = baseUrl?.trim() ?? '';
+    _geminiModel = null;
 
     final trimmedKey = key?.trim();
-    // Inisialisasi Google Gemini jika key berformat resmi Google AIzaSy
-    if (trimmedKey != null && trimmedKey.isNotEmpty && trimmedKey.startsWith('AIzaSy')) {
+    // Inisialisasi Google Gemini untuk key format AIzaSy atau AQ.Ab
+    if (_isGeminiKey(trimmedKey)) {
       final calibratedPrompt = AiTrainingService().buildCalibratedSystemPrompt();
       _geminiModel = GenerativeModel(
         model: _modelName.contains('deepseek') ? 'gemini-1.5-flash' : _modelName,
-        apiKey: trimmedKey,
+        apiKey: trimmedKey!,
         systemInstruction: Content.system(calibratedPrompt),
       );
     } else {
@@ -40,9 +64,47 @@ class GeminiAiService {
   }
 
   String? lastError;
+  String connectionStatus = 'Belum diuji';
   bool get hasApiKey => _apiKey != null && _apiKey!.trim().isNotEmpty;
   String get activeModelName => _modelName;
   String get activeBaseUrl => _apiBaseUrl;
+
+  Future<bool> testConnection() async {
+    final key = _apiKey?.trim();
+    if (key == null || !_isGeminiKey(key)) {
+      lastError = 'Kunci API Gemini tidak dikenali.';
+      connectionStatus = 'Key tidak valid';
+      return false;
+    }
+
+    try {
+      final model = GenerativeModel(
+        model: _modelName.contains('deepseek') ||
+                _modelName.contains('pass-glm') ||
+                _modelName.contains('glm')
+            ? 'gemini-2.5-flash'
+            : _modelName,
+        apiKey: key!,
+      );
+      final response = await model.generateContent([
+        Content.text('Balas hanya dengan kata "Terhubung".'),
+      ]);
+      if (response.text != null && response.text!.trim().isNotEmpty) {
+        lastError = null;
+        connectionStatus = 'Terhubung';
+        return true;
+      }
+
+      lastError = 'Gemini tidak mengembalikan respons.';
+      connectionStatus = 'Tidak ada respons';
+      return false;
+    } catch (e) {
+      lastError = e.toString();
+      connectionStatus = 'Gagal terhubung';
+      debugPrint('[ReflectMed Gemini Test Error]: $e');
+      return false;
+    }
+  }
 
   bool get isTokenGateway =>
       _apiKey != null &&
@@ -50,21 +112,299 @@ class GeminiAiService {
           _apiBaseUrl.contains('tokengateway') ||
           _modelName.toLowerCase().contains('deepseek'));
 
+  String _phaseName(GibbsPhase phase) {
+    switch (phase) {
+      case GibbsPhase.description:
+        return 'Description / Deskripsi';
+      case GibbsPhase.feelings:
+        return 'Feelings / Perasaan';
+      case GibbsPhase.evaluation:
+        return 'Evaluation / Evaluasi';
+      case GibbsPhase.analysis:
+        return 'Analysis / Analisis';
+      case GibbsPhase.conclusion:
+        return 'Conclusion / Kesimpulan';
+      case GibbsPhase.actionPlan:
+        return 'Action Plan / Rencana Aksi';
+    }
+  }
+
+  GibbsPhase _nextPhase(GibbsPhase phase) {
+    final values = GibbsPhase.values;
+    final index = values.indexOf(phase);
+    if (index < 0 || index >= values.length - 1) return phase;
+    return values[index + 1];
+  }
+
+  GibbsPhase? _parseNextPhase(dynamic value) {
+    final normalized = value?.toString().toLowerCase().trim() ?? '';
+    for (final phase in GibbsPhase.values) {
+      if (normalized.contains(phase.name.toLowerCase())) return phase;
+    }
+    if (normalized.contains('descrip') ||
+        normalized.contains('description') ||
+        normalized.contains('deskripsi')) {
+      return GibbsPhase.description;
+    }
+    if (normalized.contains('feeling') ||
+        normalized.contains('perasaan') ||
+        normalized.contains('emosi')) {
+      return GibbsPhase.feelings;
+    }
+    if (normalized.contains('evalu')) return GibbsPhase.evaluation;
+    if (normalized.contains('analys') || normalized.contains('analisis')) {
+      return GibbsPhase.analysis;
+    }
+    if (normalized.contains('concl') || normalized.contains('kesimpulan')) {
+      return GibbsPhase.conclusion;
+    }
+    if (normalized.contains('action') ||
+        normalized.contains('rencana') ||
+        normalized.contains('aksi')) {
+      return GibbsPhase.actionPlan;
+    }
+    return null;
+  }
+
+  GibbsStageEvaluation _parseStageEvaluation(
+    String raw,
+    GibbsPhase activePhase,
+    String userText,
+  ) {
+    var cleaned = raw.trim();
+    if (cleaned.contains('{') && cleaned.contains('}')) {
+      final start = cleaned.indexOf('{');
+      final end = cleaned.lastIndexOf('}');
+      cleaned = cleaned.substring(start, end + 1);
+    }
+
+    try {
+      final decoded = jsonDecode(cleaned);
+      if (decoded is Map<String, dynamic>) {
+        final status = (decoded['status'] ?? '').toString().toLowerCase();
+        final isComplete = status == 'complete';
+        final feedback = (decoded['feedback'] ?? '').toString();
+        final question = (decoded['question'] ?? '').toString();
+        final parsedNext = _parseNextPhase(decoded['nextPhase']);
+        return GibbsStageEvaluation(
+          isComplete: isComplete,
+          feedback: feedback,
+          nextPhase: isComplete
+              ? (parsedNext ?? _nextPhase(activePhase))
+              : activePhase,
+          question: question.isNotEmpty
+              ? question
+              : isComplete
+                  ? 'Bagaimana jawabanmu untuk tahap berikutnya?'
+                  : 'Bisakah kamu memperjelas jawaban untuk tahap ini?',
+        );
+      }
+    } catch (e) {
+      debugPrint('[ReflectMed Stage JSON Parse Error]: $e');
+    }
+
+    final lowerRaw = raw.toLowerCase();
+    final statusMatch = RegExp(r'"?status"?\s*[:=]\s*"?(complete|incomplete)',
+            caseSensitive: false)
+        .firstMatch(lowerRaw);
+    if (statusMatch != null) {
+      final isComplete = statusMatch.group(1)?.toLowerCase() == 'complete';
+      return GibbsStageEvaluation(
+        isComplete: isComplete,
+        feedback: '',
+        nextPhase: isComplete ? _nextPhase(activePhase) : activePhase,
+        question: raw
+            .replaceAll(RegExp(r'\{[^}]*\}'), '')
+            .trim()
+            .isEmpty
+            ? (isComplete
+                ? 'Mari lanjutkan ke tahap berikutnya.'
+                : 'Bisakah kamu memperjelas jawaban ini sedikit lagi?')
+            : raw.trim(),
+      );
+    }
+
+    final localResult =
+        _generateLocalStageEvaluation(userText, activePhase);
+    if (raw.trim().isNotEmpty &&
+        !raw.contains('Jawaban ini masih perlu diperjelas')) {
+      return GibbsStageEvaluation(
+        isComplete: localResult.isComplete,
+        feedback: '',
+        nextPhase: localResult.nextPhase,
+        question: raw.trim(),
+      );
+    }
+
+    return localResult;
+  }
+
+  GibbsStageEvaluation _generateLocalStageEvaluation(
+    String text,
+    GibbsPhase activePhase,
+  ) {
+    final normalized = text.toLowerCase().trim();
+    final wordCount = normalized.isEmpty
+        ? 0
+        : normalized.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+
+    bool complete;
+    String question;
+    switch (activePhase) {
+      case GibbsPhase.description:
+        complete = wordCount >= 10 &&
+            (normalized.contains('pasien') ||
+                normalized.contains('tindakan') ||
+                normalized.contains('kejadian') ||
+                normalized.contains('saat') ||
+                normalized.contains('konsulen') ||
+                normalized.contains('bangsal') ||
+                normalized.contains('ruangan') ||
+                normalized.contains('shift') ||
+                normalized.contains('jaga'));
+        question = 'Terima sudah berbagi. Bisakah jelaskan kronologi singkatnya: apa yang terjadi, di mana, dan siapa yang terlibat?';
+        break;
+      case GibbsPhase.feelings:
+        complete = wordCount >= 12 &&
+            RegExp(r'(sedih|cemas|takut|gugup|malu|bersalah|bingung|marah|tekan|khawatir|bangga|lega|terkejut|panik)').hasMatch(normalized);
+        question = 'Perasaan apa yang paling kuat saat kejadian berlangsung dan setelahnya? Apa respons emosionalmu?';
+        break;
+      case GibbsPhase.evaluation:
+        complete = wordCount >= 16 &&
+            (normalized.contains('baik') ||
+                normalized.contains('berhasil') ||
+                normalized.contains('kurang') ||
+                normalized.contains('sulit') ||
+                normalized.contains('berjalan'));
+        question = 'Manakah hal yang berjalan baik dan hal yang kurang baik? Apa yang menjadi bukti atau dampaknya?';
+        break;
+      case GibbsPhase.analysis:
+        complete = wordCount >= 24 &&
+            (normalized.contains('karena') ||
+                normalized.contains('mengapa') ||
+                normalized.contains('faktor') ||
+                normalized.contains('sebab') ||
+                normalized.contains('akibat') ||
+                normalized.contains('komunikasi') ||
+                normalized.contains('teori'));
+        question = 'Mengapa kejadian itu bisa terjadi menurutmu? Hubungkan faktor penyebab, komunikasi, emosi, sistem, atau teori yang relevan.';
+        break;
+      case GibbsPhase.conclusion:
+        complete = wordCount >= 16 &&
+            (normalized.contains('pelajaran') ||
+                normalized.contains('kesimpulan') ||
+                normalized.contains('menyadari') ||
+                normalized.contains('insight') ||
+                normalized.contains('belajar') ||
+                normalized.contains('berubah'));
+        question = 'Apa pelajaran atau pemahaman baru yang kamu peroleh tentang dirimu dan situasi klinis tersebut?';
+        break;
+      case GibbsPhase.actionPlan:
+        complete = wordCount >= 18 &&
+            (normalized.contains('akan') ||
+                normalized.contains('rencana') ||
+                normalized.contains('langkah') ||
+                normalized.contains('besok') ||
+                normalized.contains('minggu') ||
+                normalized.contains('berikutnya'));
+        question = 'Apa tindakan konkret yang akan kamu lakukan, kapan dilaksanakan, dan bagaimana kamu akan mengukur keberhasilannya?';
+        break;
+    }
+
+    if (complete) {
+      return GibbsStageEvaluation(
+        isComplete: true,
+        feedback: 'Jawabanmu sudah cukup memadai untuk tahap ${_phaseName(activePhase)}.',
+        nextPhase: _nextPhase(activePhase),
+        question: activePhase == GibbsPhase.actionPlan
+            ? 'Refleksi ini sudah lengkap. Kamu dapat menyusun laporan akhir sekarang.'
+            : 'Sekarang, mari lanjut ke tahap berikutnya.',
+      );
+    }
+
+    return GibbsStageEvaluation(
+      isComplete: false,
+      feedback: 'Jawaban untuk tahap ${_phaseName(activePhase)} masih perlu diperjelas.',
+      nextPhase: activePhase,
+      question: question,
+    );
+  }
+
+  Future<GibbsStageEvaluation> evaluateStage({
+    required String userText,
+    required List<ChatMessage> history,
+    required GibbsPhase activePhase,
+  }) async {
+    final key = _apiKey?.trim();
+    if (key == null || key.isEmpty) {
+      return _generateLocalStageEvaluation(userText, activePhase);
+    }
+
+    final activeName = _phaseName(activePhase);
+    final nextName = _phaseName(_nextPhase(activePhase));
+    final evaluatorPrompt = '''
+TAHAP GIBBS AKTIF SAAT INI: $activeName
+
+Tugasmu adalah menilai jawaban mahasiswa untuk tahap ini, lalu memberi respons mentoring.
+
+Balas seperti mentor klinis yang sedang bercakap-cakap dengan mahasiswa.
+Jangan menggunakan kalimat evaluasi mekanis atau menyebutkan nama internal tahap dalam jawaban.
+Ajukan paling banyak satu pertanyaan yang terarah dan hangat.
+
+Kriteria tahap:
+- Description: kronologi, lokasi, pihak yang terlibat, dan kejadian objektif.
+- Feelings: emosi, respons internal, dan dampak emosional saat/sesudah kejadian.
+- Evaluation: hal yang berjalan baik dan yang sulit atau kurang baik.
+- Analysis: penyebab, alasan, komunikasi, emosi, teori, dan faktor sistem.
+- Conclusion: insight atau pembelajaran baru yang spesifik.
+- Action Plan: tindakan konkret, indikator keberhasilan, relevansi, dan target waktu.
+
+Aturan:
+1. Gunakan "complete" hanya jika jawaban cukup spesifik dan relevan untuk tahap aktif.
+2. Jika belum memadai, gunakan "incomplete", tetap pada tahap aktif, dan ajukan satu pertanyaan klarifikasi terarah.
+3. Jika complete, akui secara singkat dan lanjutkan ke tahap berikutnya: $nextName.
+4. Jangan menilai jawaban sebagai complete hanya karena panjang; nilai isi refleksinya.
+5. Untuk Action Plan, lanjutkan ke tahap actionPlan tetap bila belum ada indikator atau target waktu yang jelas.
+6. Gunakan Bahasa Indonesia hangat, suportif, dan tidak menghakimi.
+7. Keluaran WAJIB JSON valid tanpa teks atau code fence lain.
+
+Jawaban mahasiswa:
+"$userText"
+
+Format:
+{
+  "status": "complete" atau "incomplete",
+  "feedback": "Umpan balik singkat",
+  "nextPhase": "$nextName",
+  "question": "Satu pertanyaan terarah"
+}
+''';
+
+    final raw = await sendMessage(evaluatorPrompt, history);
+    return _parseStageEvaluation(raw, activePhase, userText);
+  }
+
   /// Mengirim pesan ke AI Mentor (Otomatis mendeteksi TokenGateway DeepSeek atau Google Gemini)
   Future<String> sendMessage(String userText, List<ChatMessage> history) async {
     final key = _apiKey?.trim();
 
-    // 1. Jalur TokenGateway (DeepSeek / OpenAI Compatible)
-    if (key != null && key.isNotEmpty && (key.startsWith('tk-gw-') || _apiBaseUrl.contains('tokengateway'))) {
-      return await _sendTokenGatewayMessage(userText, history);
-    }
+    // 1. Jalur Google Gemini Resmi
+    if (_isGeminiKey(key)) {
+      if (_geminiModel == null) {
+        final calibratedPrompt = AiTrainingService().buildCalibratedSystemPrompt();
+        _geminiModel = GenerativeModel(
+          model: _modelName.contains('deepseek') ? 'gemini-1.5-flash' : _modelName,
+          apiKey: key!,
+          systemInstruction: Content.system(calibratedPrompt),
+        );
+      }
 
-    // 2. Jalur Google Gemini Resmi
-    if (_geminiModel != null) {
       try {
         final validHistory = <Content>[];
         final pastMessages = history.where((m) => m.id != 'welcome').toList();
-        if (pastMessages.isNotEmpty && pastMessages.last.isUser && pastMessages.last.text == userText) {
+        if (pastMessages.isNotEmpty &&
+            pastMessages.last.isUser &&
+            pastMessages.last.text == userText) {
           pastMessages.removeLast();
         }
 
@@ -98,6 +438,12 @@ class GeminiAiService {
         debugPrint('[ReflectMed Gemini API Error]: $e');
         return _generateIntelligentScaffoldingResponse(userText, history);
       }
+    }
+
+    // 2. Jalur TokenGateway (DeepSeek / OpenAI Compatible)
+    if (key != null && key.isNotEmpty &&
+        (key.startsWith('tk-gw-') || _apiBaseUrl.contains('tokengateway'))) {
+      return await _sendTokenGatewayMessage(userText, history);
     }
 
     // 3. Fallback: Intelligent Clinical Mentor Scaffolding Engine (Built-in AMEE Guide 44 & Gibbs)
